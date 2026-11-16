@@ -29,6 +29,12 @@ final class SettingsTabViewController: NSTabViewController {
             .receive(on: RunLoop.main)
             .sink { [weak self] on in self?.setDebugTab(on) }
             .store(in: &cancellables)
+
+        // 開發用：以環境變數指定啟動時的分頁（0=General、1=Devices…），方便逐頁截圖檢查畫面
+        if let s = ProcessInfo.processInfo.environment["AWAYLOCK_INITIAL_TAB"], let i = Int(s),
+           i >= 0, i < tabViewItems.count {
+            selectedTabViewItemIndex = i
+        }
         #endif
     }
 

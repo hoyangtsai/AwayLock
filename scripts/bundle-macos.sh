@@ -20,11 +20,13 @@ cargo build -p awaylock-ffi $CARGO_FLAGS
 DYLIB="$ROOT/target/$PROFILE/libawaylock_ffi.dylib"
 
 # 2. Swift 原生介面，連結上面的動態函式庫
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"   # 使用目前安裝的最新 macOS SDK，系統才會套用最新的介面樣式
 (
   cd apps/macos
   swift build -c "$SWIFT_CONFIG" \
     -Xlinker -L"$ROOT/target/$PROFILE" -Xlinker -lawaylock_ffi \
-    -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+    -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+    -Xlinker -platform_version -Xlinker macos -Xlinker 13.0 -Xlinker "$SDK_VERSION"
 )
 SWIFT_BIN="$(cd apps/macos && swift build -c "$SWIFT_CONFIG" --show-bin-path)/AwayLock"
 

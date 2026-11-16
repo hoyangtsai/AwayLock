@@ -11,7 +11,7 @@
 ## 功能
 - 只在狀態列顯示，不佔用 Dock。左鍵點圖示，選單只有 **Settings** 與 **Quit**。
 - 設定視窗（原生 macOS 外觀，工具列樣式分頁；關閉視窗後 App 仍留在狀態列）：
-  - **General**：開機時啟動、離開距離（0.5～5 公尺，每格 0.5 公尺）
+  - **General**：開機時啟動、離開距離（1～5 公尺，每格 0.5 公尺）
   - **Devices**：掃描附近的藍牙裝置，維護「允許列表」。只列出名稱顯示為手機或手錶的裝置
   - **About**
 - 距離以公尺顯示，不需要看懂訊號強度數字。
@@ -72,7 +72,7 @@ crates/
     distance.rs          RSSI ↔ 距離換算
     device.rs            掃描到的裝置、訊號平滑
     allowlist.rs         允許列表
-    settings.rs          設定（距離 0.5～5 公尺）
+    settings.rs          設定（距離 1～5 公尺）
     monitor.rs           鎖定判定狀態機
     ports.rs             「埠」：平台需要實作的 trait
   awaylock-platform/   平台層：實作 core 的 trait，依平台切換

@@ -46,7 +46,7 @@ pub extern "C" fn awaylock_debug_json() -> *mut c_char {
     to_c(RUNTIME.get().map(Runtime::debug_json).unwrap_or_else(|| "{}".into()))
 }
 
-/// 設定離開距離（公尺）。會自動限制在 0.5～5 並對齊 0.5。
+/// 設定離開距離（公尺）。會自動限制在 1～5 並對齊 0.5。
 #[no_mangle]
 pub extern "C" fn awaylock_set_distance(meters: f64) {
     if let Some(rt) = RUNTIME.get() {

@@ -9,6 +9,8 @@ enum TabSize {
     static let about   = NSSize(width: 560, height: 260)
 }
 
+// MARK: - 共用
+
 // MARK: - General
 
 struct GeneralView: View {
@@ -68,7 +70,7 @@ struct GeneralView: View {
             Text("離開距離：約 \(String(format: "%.1f", core.state.distanceM)) 公尺")
             Slider(value: Binding(get: { core.state.distanceM },
                                   set: { core.setDistance($0) }),
-                   in: 0.5...5, step: 0.5) {
+                   in: 1...5, step: 0.5) {
                 EmptyView()
             } minimumValueLabel: {
                 Text("近").font(.caption)
@@ -104,66 +106,80 @@ struct DevicesView: View {
     @ObservedObject private var settings = AppSettings.shared
     #endif
 
+    // 版面與 General 相同：上方是固定的 VStack，只有「附近的裝置」在內部捲動，
+    // 捲動區不會延伸到標題列下面，所以標題列顏色和 General 一致。
     var body: some View {
-        List {
-            Section {
-                if core.state.allowed.isEmpty {
-                    Text("尚未加入任何裝置。加入後，只有這些裝置離開時才會鎖定。")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(core.state.allowed) { a in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(a.name)
-                            Text(statusText(for: a))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("移除") { core.remove(id: a.id) }
-                    }
-                }
-            } header: {
-                Text("允許的裝置")
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("允許的裝置")
+            if core.state.allowed.isEmpty {
+                Text("尚未加入任何裝置。加入後，只有這些裝置離開時才會鎖定。")
+                    .foregroundStyle(.secondary)
             }
-
-            Section {
-                #if DEBUG
-                // 僅開發版且開啟 Debug 模式時，才能選擇顯示全部裝置
-                if settings.debugMode {
-                    Toggle("只顯示手機與手錶（關閉＝顯示全部裝置）", isOn: Binding(
-                        get: { core.state.onlyPhonesWatches },
-                        set: { core.setOnlyPhonesWatches($0) }))
-                    if core.state.onlyPhonesWatches && core.state.hiddenCount > 0 {
-                        Text("已隱藏 \(core.state.hiddenCount) 個其他裝置。")
+            ForEach(core.state.allowed) { a in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(a.name)
+                        Text(statusText(for: a))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Spacer()
+                    Button("移除") { core.remove(id: a.id) }
                 }
-                #endif
-                if !core.state.bluetoothReady {
-                    Text(core.state.bluetoothStatus).foregroundStyle(.orange)
+            }
+
+            Divider().padding(.vertical, 4)
+
+            sectionTitle("附近的裝置（\(core.state.bluetoothStatus)）")
+            #if DEBUG
+            // 僅開發版且開啟 Debug 模式時，才能選擇顯示全部裝置
+            if settings.debugMode {
+                Toggle("只顯示手機與手錶（關閉＝顯示全部裝置）", isOn: Binding(
+                    get: { core.state.onlyPhonesWatches },
+                    set: { core.setOnlyPhonesWatches($0) }))
+                if core.state.onlyPhonesWatches && core.state.hiddenCount > 0 {
+                    Text("已隱藏 \(core.state.hiddenCount) 個其他裝置。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                ForEach(core.state.nearby) { d in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(d.name)
-                            Text("約 \(formatMeters(d.distanceM))" + (d.isApple ? " · Apple" : ""))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            }
+            #endif
+            if !core.state.bluetoothReady {
+                Text(core.state.bluetoothStatus).foregroundStyle(.orange)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(core.state.nearby) { d in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(d.name)
+                                Text("約 \(formatMeters(d.distanceM))" + (d.isApple ? " · Apple" : ""))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("加入") { core.add(id: d.id, name: d.name) }
                         }
-                        Spacer()
-                        Button("加入") { core.add(id: d.id, name: d.name) }
                     }
                 }
-            } header: {
-                Text("附近的裝置（\(core.state.bluetoothStatus)）")
-            } footer: {
-                Text("這裡只列出名稱顯示為手機或手錶的裝置。把手機或手錶靠近 Mac，距離最近的通常就是它。Apple 裝置的識別碼會定期更換，更換後需要重新加入。")
-                    .font(.caption)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            Text("這裡只列出名稱顯示為手機或手錶的裝置。把手機或手錶靠近 Mac，距離最近的通常就是它。Apple 裝置的識別碼會定期更換，更換後需要重新加入。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(width: TabSize.devices.width, height: TabSize.devices.height)
+        .padding(.horizontal, 32)
+        .padding(.top, 24)
+        .padding(.bottom, 16)
+        .frame(width: TabSize.devices.width, height: TabSize.devices.height, alignment: .topLeading)
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
     }
 
     private func statusText(for a: AllowedInfo) -> String {
@@ -179,6 +195,13 @@ struct DebugView: View {
     @ObservedObject private var core = Core.shared
 
     var body: some View {
+        VStack(spacing: 0) {
+        Text("除錯資訊（僅開發版）")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 12)
         List {
             if let d = core.debug {
                 Section("離開判定") {
@@ -239,6 +262,8 @@ struct DebugView: View {
             } else {
                 Text("尚無資料").foregroundStyle(.secondary)
             }
+        }
+        .scrollContentBackground(.hidden)
         }
         .frame(width: TabSize.debug.width, height: TabSize.debug.height)
     }

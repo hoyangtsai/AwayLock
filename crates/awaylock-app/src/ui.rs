@@ -243,7 +243,7 @@ impl App {
                     ui.label("近");
                     let mut d = st.settings.distance_m;
                     ui.spacing_mut().slider_width = 330.0;
-                    let slider = egui::Slider::new(&mut d, 0.5..=5.0).step_by(0.5).show_value(false);
+                    let slider = egui::Slider::new(&mut d, 1.0..=5.0).step_by(0.5).show_value(false);
                     if ui.add(slider).changed() {
                         st.settings.set_distance(d);
                     }

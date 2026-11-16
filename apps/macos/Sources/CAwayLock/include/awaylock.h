@@ -21,7 +21,7 @@ char *awaylock_state_json(void);
 // 除錯狀態 JSON。發布版固定回傳 "{}"。
 char *awaylock_debug_json(void);
 
-// 設定離開距離（公尺），會自動限制在 0.5～5 並對齊 0.5。
+// 設定離開距離（公尺），會自動限制在 1～5 並對齊 0.5。
 void awaylock_set_distance(double meters);
 
 // 「附近的裝置」是否只顯示手機與手錶（依廣播內容推測）。

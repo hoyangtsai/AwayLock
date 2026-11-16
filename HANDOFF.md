@@ -26,7 +26,7 @@
 ## 目前功能
 - 狀態列圖示（不在 Dock，`LSUIElement`）。左鍵選單只有 **Settings**、**Quit**。
 - 啟動時顯示設定視窗，工具列樣式分頁：
-  - **General**：開機時啟動（Swift 的 `SMAppService`）、離開距離滑桿（0.5～5 公尺，每格 0.5）、Quit
+  - **General**：開機時啟動（Swift 的 `SMAppService`）、離開距離滑桿（1～5 公尺，每格 0.5）、Quit
   - **Devices**：掃描附近 BLE 裝置、維護允許列表。**一般模式一律只顯示手機與手錶，沒有開關**；
     只有開發版開啟 Debug 模式後，才能選「只顯示手機與手錶」或「全部裝置」（Rust 端在發布版強制過濾，
     `set_only_phones_watches` 不做事）。
@@ -67,6 +67,7 @@ cargo test --workspace            # 核心邏輯與狀態檢視測試
 - `awaylock-ffi/build.rs` 在連結時設定 `-install_name @rpath/libawaylock_ffi.dylib`，不要改用 `install_name_tool`
   事後修改（同樣會破壞檔案）。
 - 發布版已用 `strings` 確認 Swift 執行檔與 Rust 動態庫都不含 Debug 字串。
+- 打包時以連結器參數把 SDK 版本標成目前安裝的最新 macOS SDK（`-platform_version macos 13.0 <SDK>`，腳本用 `xcrun --show-sdk-version` 取得），系統才會用最新的樣式（Liquid Glass）繪製視窗與滑桿；最低支援仍是 macOS 13。
 - 兩者 ad-hoc 簽章；每次重新編譯後可能需要重新授權藍牙。
 - 「開機時啟動」需要 App 放在 `/Applications` 才可靠。
 - App 圖示：`scripts/make-icon.swift` 產生 `assets/AppIcon.icns`。

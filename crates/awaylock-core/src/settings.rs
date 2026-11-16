@@ -3,7 +3,7 @@
 use crate::distance::rssi_threshold;
 use serde::{Deserialize, Serialize};
 
-pub const MIN_DISTANCE_M: f64 = 0.5;
+pub const MIN_DISTANCE_M: f64 = 1.0;
 pub const MAX_DISTANCE_M: f64 = 5.0;
 pub const DISTANCE_STEP_M: f64 = 0.5;
 pub const DEFAULT_DISTANCE_M: f64 = 5.0;
@@ -11,7 +11,7 @@ pub const DEFAULT_DISTANCE_M: f64 = 5.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    /// 離開距離（公尺）。範圍 0.5～5，以 0.5 為一格。
+    /// 離開距離（公尺）。範圍 1～5，以 0.5 為一格。
     pub distance_m: f64,
     /// 「附近的裝置」只顯示手機與手錶（依廣播內容推測，可關閉）。
     pub only_phones_watches: bool,
@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn normalizes() {
         assert_eq!(Settings::normalize_distance(2.3), 2.5);
-        assert_eq!(Settings::normalize_distance(0.0), 0.5);
+        assert_eq!(Settings::normalize_distance(0.0), 1.0);
         assert_eq!(Settings::normalize_distance(99.0), 5.0);
     }
 
