@@ -55,6 +55,19 @@ open dist/AwayLock.app
 cargo test --workspace
 ```
 
+## 安裝（Homebrew）
+```bash
+brew install --cask hoyangtsai/app/awaylock
+```
+目前只提供 Apple Silicon（arm64）版本。App 沒有 Apple 公證，Homebrew 安裝時會自動移除隔離標記，所以可以直接開啟。
+
+## 發佈新版本（維護者）
+1. 修改 `packaging/macos/Info.plist` 的版本號。
+2. 執行 `scripts/package-macos.sh`，產生 `dist/AwayLock-<版本>-arm64.zip` 與 `dist/awaylock.rb`。
+3. 在 GitHub 建立 tag `v<版本>` 的 Release，上傳 zip：
+   `gh release create v<版本> dist/AwayLock-<版本>-arm64.zip`
+4. 把 `dist/awaylock.rb` 複製到 tap 倉庫 `hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`，commit 並 push。
+
 ## 使用方式
 1. 開啟 App，到 **Devices** 分頁。
 2. 把手機、手錶或藍牙配件靠近 Mac，在「附近的裝置」找距離最近的那個，按「加入」。
