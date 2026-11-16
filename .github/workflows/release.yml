@@ -1,0 +1,80 @@
+name: Release
+
+# main 有新 commit（程式碼變更）就打包、發佈 GitHub Release，並更新 Homebrew tap。
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+
+# 同時只跑一個，避免版本號與 tap 更新互相競爭
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # 建立 Release 與 tag
+
+jobs:
+  release:
+    runs-on: macos-14 # Apple Silicon（cask 目前限定 arm64）
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 檢查 tap 權杖
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::缺少 secret TAP_TOKEN（需要對 hoyangtsai/homebrew-app 有寫入權限的 PAT）"
+            exit 1
+          fi
+
+      - name: 安裝 Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 測試
+        run: cargo test --workspace
+
+      - name: 決定版本號
+        id: ver
+        run: |
+          # 基礎版本取自 Info.plist 的 major.minor，patch 用 run number 自動遞增
+          BASE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' packaging/macos/Info.plist)"
+          VERSION="${BASE%.*}.${GITHUB_RUN_NUMBER}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "版本：$VERSION"
+
+      - name: 打包
+        env:
+          AWAYLOCK_VERSION: ${{ steps.ver.outputs.version }}
+          AWAYLOCK_BUILD: ${{ github.run_number }}
+        run: scripts/package-macos.sh
+
+      - name: 建立 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          gh release create "v$VERSION" "dist/AwayLock-$VERSION-arm64.zip" \
+            --target "$GITHUB_SHA" \
+            --title "AwayLock $VERSION" \
+            --generate-notes
+
+      - name: 更新 Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/hoyangtsai/homebrew-app.git" tap
+          mkdir -p tap/Casks
+          cp dist/awaylock.rb tap/Casks/awaylock.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/awaylock.rb
+          git commit -m "awaylock $VERSION"
+          git push origin HEAD:main

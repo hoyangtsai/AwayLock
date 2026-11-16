@@ -43,6 +43,12 @@ cp assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleName $NAME" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $NAME" "$APP/Contents/Info.plist"
 
+# CI 用：AWAYLOCK_VERSION（例如 0.1.7）與 AWAYLOCK_BUILD（整數）覆寫 Info.plist 的版本
+if [ -n "${AWAYLOCK_VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $AWAYLOCK_VERSION" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${AWAYLOCK_BUILD:-$AWAYLOCK_VERSION}" "$APP/Contents/Info.plist"
+fi
+
 codesign --force --sign - "$APP/Contents/Frameworks/libawaylock_ffi.dylib"
 codesign --force --sign - "$APP"
 echo "完成（$MODE）：$ROOT/$APP"
