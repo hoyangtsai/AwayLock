@@ -1,128 +1,130 @@
 # AwayLock
 
-人離開電腦時，自動鎖定電腦的狀態列 App。目前支援 macOS，架構已為 Linux 預留。
+English | [繁體中文](README.zh-tw.md)
 
-用藍牙低功耗（BLE）掃描你隨身裝置的訊號。電腦解鎖期間，只要你加入「允許列表」的裝置中，
-有任何一個超過設定距離或突然掃描不到，就自動鎖定螢幕。
+A menu bar app that automatically locks your computer when you walk away. Currently supports macOS, with an architecture prepared for Linux.
 
-> **狀態：開發中。** 核心邏輯用 Rust 撰寫，macOS 介面是 Swift 原生視窗。已能編譯並啟動，
-> 但藍牙掃描與實際鎖定行為尚未完整實機驗證。已知限制請見下方「限制」與 [HANDOFF.md](HANDOFF.md)。
+AwayLock scans Bluetooth Low Energy (BLE) signals from devices you carry. While your computer is unlocked,
+if any device on your allowlist moves beyond the configured distance or stops being detected, AwayLock automatically locks the screen.
 
-## 功能
-- 只在狀態列顯示，不佔用 Dock。左鍵點圖示，選單只有 **Settings** 與 **Quit**。
-- 設定視窗（原生 macOS 外觀，工具列樣式分頁；關閉視窗後 App 仍留在狀態列）：
-  - **General**：開機時啟動、離開距離（1～5 公尺，每格 0.5 公尺）
-  - **Devices**：掃描附近的藍牙裝置，維護「允許列表」。只列出名稱顯示為手機或手錶的裝置
+> **Status: In development.** The core logic is written in Rust, with a native Swift interface for macOS. The app builds and launches,
+> but Bluetooth scanning and actual screen locking have not yet been fully verified on real hardware. See “Limitations” below and [HANDOFF.md](HANDOFF.md) for known issues.
+
+## Features
+- Runs exclusively in the menu bar, without a Dock icon. Click the icon to open a menu with **Settings** and **Quit**.
+- Settings window with a native macOS appearance and toolbar-style tabs. The app stays in the menu bar when the window is closed:
+  - **General**: Launch at login and departure distance (1–5 meters, in 0.5-meter increments).
+  - **Devices**: Scan nearby Bluetooth devices and manage the allowlist. Only devices whose names identify them as phones or watches are listed.
   - **About**
-- 距離以公尺顯示，不需要看懂訊號強度數字。
-- 開發版另有 **Debug** 分頁（顯示掃描到的裝置、即時訊號、判定細節）。發布版完全不含這些程式碼。
+- Distances are displayed in meters, so there is no need to interpret signal strength values.
+- Development builds include a **Debug** tab showing detected devices, live signals, and decision details. This code is entirely excluded from release builds.
 
-## 鎖定規則
-1. 電腦每次解鎖後，開始一段新的監控期間。
-2. 期間內，允許列表中的裝置只要被掃描到、且在設定距離內，就列入監控。
-3. 列入監控的裝置中，任何一個超過設定距離，或突然掃描不到（超過 15 秒沒收到廣播），
-   並連續 3 次檢查（每 5 秒一次）都如此，就鎖定螢幕。
-4. 期間內從沒被掃描到的裝置不會觸發鎖定。
-5. 鎖定後清空監控名單；電腦真的鎖定、再解鎖後才重新開始。
+## Locking Rules
+1. Each time the computer is unlocked, a new monitoring session begins.
+2. During the session, an allowlisted device is added to monitoring once it is detected within the configured distance.
+3. If any monitored device moves beyond the configured distance or stops being detected (no advertisement received for more than 15 seconds),
+   and remains in that state for 3 consecutive checks (performed every 5 seconds), the screen is locked.
+4. Devices that have never been detected during the session do not trigger a lock.
+5. After a lock is triggered, the monitored device list is cleared. Monitoring restarts only after the computer has actually locked and is then unlocked again.
 
-## 需求
-- Rust（stable）與 Xcode（Swift 5.9 以上）
-- macOS 13 以上；第一次啟動時允許藍牙權限
-- 「系統設定 → 鎖定畫面 → 需要密碼」設為「**立即**」。App 是讓顯示器休眠（`pmset displaysleepnow`），
-  沒有這項設定就不會要求密碼。
+## Requirements
+- Rust (stable) and Xcode (Swift 5.9 or later).
+- macOS 13 or later; grant Bluetooth permission on first launch.
+- Set “System Settings → Lock Screen → Require password” to “**Immediately**.” The app puts the display to sleep (`pmset displaysleepnow`);
+  without this setting, waking the display will not require a password.
 
-## 建置與執行
+## Build and Run
 ```bash
-scripts/bundle-macos.sh release   # 發布版 → dist/AwayLock.app
-scripts/bundle-macos.sh dev       # 開發版 → dist/AwayLock Dev.app（含 Debug 分頁）
+scripts/bundle-macos.sh release   # Release build → dist/AwayLock.app
+scripts/bundle-macos.sh dev       # Development build → dist/AwayLock Dev.app (includes the Debug tab)
 ```
 
 ```bash
 open dist/AwayLock.app
 ```
 
-- 腳本會先編譯 Rust 核心成動態函式庫，再編譯 Swift 介面並連結它，最後組成 `.app`。
-- 必須用打包出來的 `.app` 執行：macOS 需要 `Info.plist` 裡的藍牙權限說明，沒有的話程式會直接中止。
-- 開發版使用不同的 bundle id 與設定資料夾，不會和發布版互相干擾。
-- Debug 功能在 Rust 端以 `#[cfg(debug_assertions)]`、在 Swift 端以 `#if DEBUG` 控制，
-  只有開發版會編譯進去。
-- 兩者都是 ad-hoc 簽章。每次重新編譯後可能需要重新授權藍牙。
-- 「開機時啟動」需要把 App 放進 `/Applications` 才可靠。
+- The script first compiles the Rust core into a dynamic library, then builds and links the Swift interface, and finally assembles the `.app` bundle.
+- Run the bundled `.app`: macOS requires the Bluetooth permission description in `Info.plist`. Without it, the process will abort.
+- Development builds use a separate bundle ID and settings directory, so they do not interfere with release builds.
+- Debug features are gated by `#[cfg(debug_assertions)]` in Rust and `#if DEBUG` in Swift,
+  and are compiled only into development builds.
+- Both builds use ad-hoc signing. You may need to grant Bluetooth permission again after each rebuild.
+- For reliable launch-at-login behavior, place the app in `/Applications`.
 
-測試核心邏輯：
+Run the core logic tests:
 
 ```bash
 cargo test --workspace
 ```
 
-## 安裝（Homebrew）
+## Installation (Homebrew)
 ```bash
 brew install --cask hoyangtsai/app/awaylock
 ```
-目前只提供 Apple Silicon（arm64）版本。App 沒有 Apple 公證，Homebrew 安裝時會自動移除隔離標記，所以可以直接開啟。
+Only Apple Silicon (arm64) builds are currently available. The app is not notarized by Apple. Homebrew automatically removes the quarantine attribute during installation, allowing the app to open directly.
 
-## 發佈新版本（維護者）
-1. 修改 `packaging/macos/Info.plist` 的版本號。
-2. 執行 `scripts/package-macos.sh`，產生 `dist/AwayLock-<版本>-arm64.zip` 與 `dist/awaylock.rb`。
-3. 在 GitHub 建立 tag `v<版本>` 的 Release，上傳 zip：
-   `gh release create v<版本> dist/AwayLock-<版本>-arm64.zip`
-4. 把 `dist/awaylock.rb` 複製到 tap 倉庫 `hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`，commit 並 push。
+## Publishing a New Version (Maintainers)
+1. Update the version number in `packaging/macos/Info.plist`.
+2. Run `scripts/package-macos.sh` to generate `dist/AwayLock-<version>-arm64.zip` and `dist/awaylock.rb`.
+3. Create a GitHub release tagged `v<version>` and upload the ZIP:
+   `gh release create v<version> dist/AwayLock-<version>-arm64.zip`
+4. Copy `dist/awaylock.rb` to `Casks/awaylock.rb` in the `hoyangtsai/homebrew-app` tap repository, then commit and push.
 
-## 使用方式
-1. 開啟 App，到 **Devices** 分頁。
-2. 把手機、手錶或藍牙配件靠近 Mac，在「附近的裝置」找距離最近的那個，按「加入」。
-3. 在 **General** 調整離開距離。
-4. 解鎖狀態下拿著裝置走遠，超過距離後螢幕就會鎖定。
+## Usage
+1. Open the app and go to the **Devices** tab.
+2. Bring your phone, watch, or Bluetooth accessory close to your Mac. Find the closest device under “Nearby Devices” and click “Add.”
+3. Adjust the departure distance in **General**.
+4. While the computer is unlocked, walk away with the device. The screen will lock once the device exceeds the configured distance.
 
-## 架構
+## Architecture
 
-核心邏輯用 Rust 寫成 Cargo workspace，分層；各平台的原生介面放在 `apps/`。
-依賴方向：介面 → `runtime` → `platform` → `core`。
+The core logic is organized as a layered Rust Cargo workspace. Native interfaces for each platform live under `apps/`.
+Dependencies flow from the interface → `runtime` → `platform` → `core`.
 
 ```
 crates/
-  awaylock-core/       核心層：純邏輯，不依賴任何作業系統 API，有單元測試
-    distance.rs          RSSI ↔ 距離換算
-    device.rs            掃描到的裝置、訊號平滑
-    allowlist.rs         允許列表
-    settings.rs          設定（距離 1～5 公尺）
-    monitor.rs           鎖定判定狀態機
-    ports.rs             「埠」：平台需要實作的 trait
-  awaylock-platform/   平台層：實作 core 的 trait，依平台切換
-    ble.rs               btleplug 藍牙掃描（macOS / Linux 共用）
-    locker.rs            鎖定螢幕
-    lockstate.rs         查詢電腦是否已鎖定
-    autostart.rs         開機啟動
-  awaylock-runtime/    執行層：組合核心與平台層（背景檢查、設定存取、給介面用的狀態檢視）
-  awaylock-ffi/        C 介面（動態函式庫），狀態以 JSON 傳遞，給 Swift 呼叫
-  awaylock-app/        跨平台備用介面（egui），預留給 Linux；macOS 不使用
+  awaylock-core/       Core: pure logic, no operating system API dependencies, with unit tests
+    distance.rs          RSSI ↔ distance conversion
+    device.rs            Detected devices and signal smoothing
+    allowlist.rs         Device allowlist
+    settings.rs          Settings (distance: 1–5 meters)
+    monitor.rs           Lock decision state machine
+    ports.rs             Ports: traits implemented by the platform layer
+  awaylock-platform/   Platform: platform-specific implementations of core traits
+    ble.rs               btleplug Bluetooth scanning (shared by macOS and Linux)
+    locker.rs            Screen locking
+    lockstate.rs         Querying whether the computer is locked
+    autostart.rs         Launch at login
+  awaylock-runtime/    Runtime: combines core and platform layers (background checks, settings storage, UI state views)
+  awaylock-ffi/        C interface (dynamic library), passing state as JSON for Swift callers
+  awaylock-app/        Alternative cross-platform interface (egui), reserved for Linux; unused on macOS
 apps/
-  macos/               macOS 原生介面（SwiftUI / AppKit），透過 C 介面呼叫 Rust
-assets/AppIcon.icns    App 圖示（由 scripts/make-icon.swift 產生）
-packaging/macos/       macOS 打包用的 Info.plist
-scripts/               打包腳本、圖示產生腳本、早期原型
+  macos/               Native macOS interface (SwiftUI / AppKit), calling Rust through the C interface
+assets/AppIcon.icns    App icon (generated by scripts/make-icon.swift)
+packaging/macos/       Info.plist for macOS packaging
+scripts/               Packaging scripts, icon generation script, and early prototypes
 ```
 
-| 能力 | macOS | Linux（尚未驗證） |
+| Capability | macOS | Linux (unverified) |
 |---|---|---|
-| 藍牙掃描 | btleplug（CoreBluetooth） | btleplug（BlueZ） |
-| 鎖定螢幕 | `pmset displaysleepnow` | `loginctl lock-session` |
-| 鎖定狀態 | `CGSessionCopyCurrentDictionary` | `loginctl show-session -p LockedHint` |
-| 開機啟動 | Swift 端 `SMAppService` | XDG autostart |
-| 介面 | Swift 原生（`apps/macos`） | egui（`crates/awaylock-app`） |
+| Bluetooth scanning | btleplug (CoreBluetooth) | btleplug (BlueZ) |
+| Screen locking | `pmset displaysleepnow` | `loginctl lock-session` |
+| Lock state | `CGSessionCopyCurrentDictionary` | `loginctl show-session -p LockedHint` |
+| Launch at login | `SMAppService` in Swift | XDG autostart |
+| Interface | Native Swift (`apps/macos`) | egui (`crates/awaylock-app`) |
 
-要支援新平台，只需要在 `awaylock-platform` 補上對應的實作；核心判定邏輯不用改。
+To support a new platform, add the corresponding implementations in `awaylock-platform`. The core decision logic does not need to change.
 
-## 限制
-- **Apple 裝置的識別碼會定期更換。** iPhone / Apple Watch 為了防追蹤，BLE 位址約每 15 分鐘更換一次
-  （實際週期未實測），加入允許列表的識別碼會失效，需要重新加入，否則會被判定為「掃描不到」而觸發鎖定。
-  固定位址的藍牙配件（耳機、喇叭、手環等）不受影響。詳見 [HANDOFF.md](HANDOFF.md)。
-- iPhone 和 Apple Watch 無法與 Mac 藍牙配對，因此讀不到配對式的連線訊號。
-- 「只顯示手機與手錶」是依**裝置名稱**判斷的（含 iPhone、phone、watch，且不像耳機、Mac 等）。
-  沒有名稱的裝置（例如更換識別碼後的 iPhone）不會顯示，因為廣播內容分不出它是手機、iPad 還是 Mac。
-  一般使用者無法關閉這個過濾；開發版開啟 Debug 模式後，可以在 Devices 分頁選擇顯示全部裝置。
-- 距離是由訊號強度粗估（1 公尺約 -59 dBm、環境係數 2.5），牆壁、人體遮擋、手機放口袋都會造成誤差，僅供參考。
-- Linux 版尚未編譯或測試。Linux 的狀態列圖示在 GNOME 上需要額外的擴充套件。
+## Limitations
+- **Apple device identifiers change periodically.** To prevent tracking, iPhone and Apple Watch BLE addresses rotate approximately every 15 minutes
+  (the actual interval has not been measured). An allowlisted identifier will become invalid and must be added again; otherwise, the device will be considered missing and trigger a lock.
+  Bluetooth accessories with fixed addresses (headphones, speakers, fitness bands, etc.) are unaffected. See [HANDOFF.md](HANDOFF.md).
+- iPhone and Apple Watch cannot be paired with a Mac over Bluetooth, so signal readings from a paired connection are unavailable.
+- The “phones and watches only” filter uses **device names** (containing iPhone, phone, or watch, while excluding names that resemble headphones, Macs, etc.).
+  Unnamed devices (such as an iPhone after its identifier changes) are hidden because their advertisements do not distinguish a phone from an iPad or Mac.
+  Regular users cannot disable this filter. In development builds, enabling Debug mode allows the Devices tab to show all devices.
+- Distance is a rough estimate based on signal strength (approximately -59 dBm at 1 meter, with an environmental factor of 2.5). Walls, body obstruction, and carrying a phone in a pocket can all affect accuracy. Treat the distance as a reference only.
+- The Linux version has not been built or tested. Its tray icon requires an additional extension on GNOME.
 
-## 授權
-尚未指定。
+## License
+Not yet specified.
