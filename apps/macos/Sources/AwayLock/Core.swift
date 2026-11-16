@@ -21,11 +21,14 @@ struct CoreState: Decodable {
     var distanceM: Double
     var bluetoothStatus: String
     var bluetoothReady: Bool
+    var onlyPhonesWatches: Bool
     var allowed: [AllowedInfo]
     var nearby: [NearbyInfo]
+    var hiddenCount: Int
 
     static let empty = CoreState(distanceM: 5.0, bluetoothStatus: "初始化中…",
-                                 bluetoothReady: false, allowed: [], nearby: [])
+                                 bluetoothReady: false, onlyPhonesWatches: true,
+                                 allowed: [], nearby: [], hiddenCount: 0)
 }
 
 #if DEBUG
@@ -44,6 +47,8 @@ struct DebugDevice: Decodable, Identifiable {
     let id: String
     let name: String
     let isApple: Bool
+    let kind: String
+    let appleTypes: String
     let allowed: Bool
     let rssi: Int
     let distanceM: Double
@@ -102,6 +107,11 @@ final class Core: ObservableObject {
 
     func setDistance(_ meters: Double) {
         awaylock_set_distance(meters)
+        refresh()
+    }
+
+    func setOnlyPhonesWatches(_ on: Bool) {
+        awaylock_set_only_phones_watches(on)
         refresh()
     }
 

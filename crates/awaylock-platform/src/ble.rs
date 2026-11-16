@@ -1,6 +1,6 @@
 //! 以 btleplug 持續掃描附近的 BLE 廣播（macOS 與 Linux 共用）。
 
-use awaylock_core::device::{NearbyDevice, APPLE_COMPANY_ID};
+use awaylock_core::device::{continuity_types, NearbyDevice, APPLE_COMPANY_ID};
 use awaylock_core::ports::DeviceSource;
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
@@ -78,16 +78,23 @@ async fn scan(shared: &Arc<Mutex<Shared>>) -> Result<(), String> {
                 let Ok(p) = central.peripheral(&id).await else { continue };
                 let Ok(Some(props)) = p.properties().await else { continue };
                 let Some(rssi) = props.rssi else { continue };
-                let is_apple = props.manufacturer_data.contains_key(&APPLE_COMPANY_ID);
+                let apple_data = props.manufacturer_data.get(&APPLE_COMPANY_ID);
+                let is_apple = apple_data.is_some();
+                let apple_types = apple_data.map(|d| continuity_types(d)).unwrap_or_default();
                 let key = id.to_string();
                 let now = Instant::now();
                 let rssi = i32::from(rssi);
 
                 let mut s = shared.lock().unwrap();
                 match s.devices.get_mut(&key) {
-                    Some(d) => d.update(rssi, props.local_name, is_apple, now),
+                    Some(d) => {
+                        d.update(rssi, props.local_name, is_apple, now);
+                        d.merge_apple_types(&apple_types);
+                    }
                     None => {
-                        s.devices.insert(key.clone(), NearbyDevice::new(key, props.local_name, rssi, is_apple, now));
+                        let mut d = NearbyDevice::new(key.clone(), props.local_name, rssi, is_apple, now);
+                        d.merge_apple_types(&apple_types);
+                        s.devices.insert(key, d);
                     }
                 }
             }

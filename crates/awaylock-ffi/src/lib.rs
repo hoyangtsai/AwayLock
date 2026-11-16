@@ -54,6 +54,14 @@ pub extern "C" fn awaylock_set_distance(meters: f64) {
     }
 }
 
+/// 「附近的裝置」是否只顯示手機與手錶。
+#[no_mangle]
+pub extern "C" fn awaylock_set_only_phones_watches(on: bool) {
+    if let Some(rt) = RUNTIME.get() {
+        rt.set_only_phones_watches(on);
+    }
+}
+
 /// 把裝置加入允許列表。
 ///
 /// # Safety

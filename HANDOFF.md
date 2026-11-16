@@ -27,7 +27,15 @@
 - 狀態列圖示（不在 Dock，`LSUIElement`）。左鍵選單只有 **Settings**、**Quit**。
 - 啟動時顯示設定視窗，工具列樣式分頁：
   - **General**：開機時啟動（Swift 的 `SMAppService`）、離開距離滑桿（0.5～5 公尺，每格 0.5）、Quit
-  - **Devices**：掃描附近 BLE 裝置、維護允許列表
+  - **Devices**：掃描附近 BLE 裝置、維護允許列表。**一般模式一律只顯示手機與手錶，沒有開關**；
+    只有開發版開啟 Debug 模式後，才能選「只顯示手機與手錶」或「全部裝置」（Rust 端在發布版強制過濾，
+    `set_only_phones_watches` 不做事）。
+    分類邏輯在 `crates/awaylock-core/src/device.rs`（`classify`）：**只看名稱**含 iphone / phone / watch 才算手機或手錶
+    （先排除 headphone、airpods、macbook 等其他關鍵字）。有名稱但不像手機的（例如 HomePod 的「客廳」）一律不算。
+    沒有名稱的 Apple 裝置不算手機：Nearby Info、Handoff 等廣播代碼所有 Apple 裝置都會送，無法區分（曾因此把 HomePod、
+    同一支手機的其他廣播位址誤判成手機）。廣播代碼只用來辨認耳機、AirTag、AirPlay 裝置（0x07 / 0x12 / 0x09，社群逆向研究，
+    非官方、未驗證）。開發版 Debug 分頁會顯示每個裝置的推測種類與原始代碼。
+    **副作用**：iPhone 識別碼更換後，新的那一筆若沒有名稱就不會出現在一般模式的列表（需要靠開發版找出來）。
   - **Debug**：只存在開發版，含 dBm 與判定細節
   - **About**
 - 一般使用者介面只顯示公尺，不顯示 dBm。
@@ -69,6 +77,7 @@ cargo test --workspace            # 核心邏輯與狀態檢視測試
   發布版不含 Debug 字串。
 - **未驗證**：
   - 藍牙掃描實際結果（btleplug 在 macOS 是否持續回報 RSSI 更新）
+  - 過濾在使用者實機上：已知「Hoyang's iPhone 17 Pro」「Hoyang's Apple Watch」會因名稱被顯示；其他情況（名稱消失、更換識別碼後）未驗證
   - Swift 與 Rust 之間的資料流在畫面上的呈現（Devices / Debug 分頁的實際內容）
   - 實際鎖定行為、鎖定／解鎖偵測（`CGSSessionScreenIsLocked`）
   - 「開機時啟動」

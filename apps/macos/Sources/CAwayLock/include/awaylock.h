@@ -24,6 +24,9 @@ char *awaylock_debug_json(void);
 // 設定離開距離（公尺），會自動限制在 0.5～5 並對齊 0.5。
 void awaylock_set_distance(double meters);
 
+// 「附近的裝置」是否只顯示手機與手錶（依廣播內容推測）。
+void awaylock_set_only_phones_watches(bool on);
+
 // 加入／移除允許列表中的裝置。
 void awaylock_add_device(const char *id, const char *name);
 void awaylock_remove_device(const char *id);

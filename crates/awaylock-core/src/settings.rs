@@ -13,6 +13,8 @@ pub const DEFAULT_DISTANCE_M: f64 = 5.0;
 pub struct Settings {
     /// 離開距離（公尺）。範圍 0.5～5，以 0.5 為一格。
     pub distance_m: f64,
+    /// 「附近的裝置」只顯示手機與手錶（依廣播內容推測，可關閉）。
+    pub only_phones_watches: bool,
     /// 僅開發版（debug 編譯）存在；發布版沒有這個欄位。
     #[cfg(debug_assertions)]
     pub debug_mode: bool,
@@ -22,6 +24,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             distance_m: DEFAULT_DISTANCE_M,
+            only_phones_watches: true,
             #[cfg(debug_assertions)]
             debug_mode: false,
         }
@@ -66,5 +69,6 @@ mod tests {
     fn missing_fields_use_defaults() {
         let s: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(s.distance_m, DEFAULT_DISTANCE_M);
+        assert!(s.only_phones_watches);
     }
 }

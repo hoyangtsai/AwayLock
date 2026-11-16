@@ -5,7 +5,7 @@
 
 use crate::Runtime;
 use awaylock_core::distance::estimated_meters;
-use awaylock_core::NearbyDevice;
+use awaylock_core::{DeviceKind, NearbyDevice};
 use serde::Serialize;
 use std::time::Instant;
 
@@ -31,9 +31,19 @@ pub struct StateView {
     pub distance_m: f64,
     pub bluetooth_status: String,
     pub bluetooth_ready: bool,
+    /// 「附近的裝置」是否只顯示手機與手錶。
+    pub only_phones_watches: bool,
     pub allowed: Vec<AllowedView>,
-    /// 附近裝置（已在允許列表的不含），距離由近到遠。
+    /// 附近裝置（已在允許列表的不含；開啟過濾時只含手機與手錶），依名稱排序。
+    /// 排序與訊號、距離無關，所以人走動時列表的順序不會跳動。
     pub nearby: Vec<NearbyView>,
+    /// 因過濾而隱藏的裝置數。
+    pub hidden_count: usize,
+}
+
+/// 依顯示名稱排序（不分大小寫），名稱相同時依識別碼，讓順序固定、不受訊號變動影響。
+fn sort_by_name(list: &mut [&NearbyDevice]) {
+    list.sort_by_cached_key(|d| (d.display_name().to_lowercase(), d.id.clone()));
 }
 
 impl Runtime {
@@ -60,11 +70,15 @@ impl Runtime {
             })
             .collect();
 
+        // 發布版固定只顯示手機與手錶；只有開發版可以選擇看全部
+        let only_phones = if cfg!(debug_assertions) { st.settings.only_phones_watches } else { true };
         let mut others: Vec<&NearbyDevice> =
             devices.values().filter(|d| !st.allowlist.contains(&d.id)).collect();
-        others.sort_by(|a, b| b.rssi.cmp(&a.rssi));
-        let nearby = others
+        sort_by_name(&mut others);
+        let total = others.len();
+        let nearby: Vec<NearbyView> = others
             .into_iter()
+            .filter(|d| !only_phones || d.kind() == DeviceKind::PhoneOrWatch)
             .map(|d| NearbyView {
                 id: d.id.clone(),
                 name: d.display_name(),
@@ -72,13 +86,16 @@ impl Runtime {
                 distance_m: estimated_meters(d.rssi),
             })
             .collect();
+        let hidden_count = total - nearby.len();
 
         StateView {
             distance_m: st.settings.distance_m,
             bluetooth_status: self.source.status_text(),
             bluetooth_ready: self.source.bluetooth_ready(),
+            only_phones_watches: only_phones,
             allowed,
             nearby,
+            hidden_count,
         }
     }
 
@@ -122,6 +139,10 @@ mod debug {
         pub id: String,
         pub name: String,
         pub is_apple: bool,
+        /// 推測的裝置種類（手機/手錶、其他、未知）。
+        pub kind: String,
+        /// Apple 廣播訊息類型（十六進位），例如「0C 10」。
+        pub apple_types: String,
         pub allowed: bool,
         pub rssi: i32,
         pub distance_m: f64,
@@ -174,13 +195,15 @@ mod debug {
             .collect();
 
         let mut all: Vec<&NearbyDevice> = devices.values().collect();
-        all.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+        super::sort_by_name(&mut all);
         let all = all
             .into_iter()
             .map(|d| DebugDevice {
                 id: d.id.clone(),
                 name: d.display_name(),
                 is_apple: d.is_apple,
+                kind: d.kind().label().to_string(),
+                apple_types: d.apple_types.iter().map(|t| format!("{t:02X}")).collect::<Vec<_>>().join(" "),
                 allowed: st.allowlist.contains(&d.id),
                 rssi: d.rssi,
                 distance_m: estimated_meters(d.rssi),
@@ -245,12 +268,21 @@ mod tests {
     }
 
     fn runtime() -> Runtime {
+        runtime_with(-70, -65)
+    }
+
+    /// `other_rssi`、`buds_rssi` 讓測試能改變訊號強弱，驗證排序不受影響。
+    fn runtime_with(other_rssi: i32, buds_rssi: i32) -> Runtime {
         // 所有測試都用暫存資料夾，絕不寫入使用者的真實設定
         std::env::set_var("AWAYLOCK_CONFIG_DIR", std::env::temp_dir().join("awaylock-test-config"));
         let now = Instant::now();
         let mut devs = HashMap::new();
         devs.insert("mine".into(), NearbyDevice::new("mine".into(), Some("My Watch".into()), -59, true, now));
-        devs.insert("other".into(), NearbyDevice::new("other".into(), None, -70, false, now));
+        devs.insert("other".into(), NearbyDevice::new("other".into(), Some("Pixel Phone".into()), other_rssi, false, now));
+        // 耳機：不是手機或手錶，預設會被過濾掉
+        devs.insert("buds".into(), NearbyDevice::new("buds".into(), Some("AirPods Pro".into()), buds_rssi, true, now));
+        // 沒有任何線索的裝置
+        devs.insert("mystery".into(), NearbyDevice::new("mystery".into(), None, -80, false, now));
         let mut allow = AllowList::default();
         allow.add("mine", "My Watch");
         Runtime {
@@ -273,9 +305,38 @@ mod tests {
         assert!(s.allowed[0].seen);
         // -59 dBm ≈ 1 公尺
         assert!((s.allowed[0].distance_m.unwrap() - 1.0).abs() < 0.01);
-        // 已允許的不出現在「附近」，另一個才出現
+        // 已允許的不出現在「附近」；預設只顯示手機與手錶，耳機和未知裝置被隱藏
+        assert!(s.only_phones_watches);
         assert_eq!(s.nearby.len(), 1);
         assert_eq!(s.nearby[0].id, "other");
+        assert_eq!(s.hidden_count, 2);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn filter_can_be_turned_off_in_dev_builds() {
+        let rt = runtime();
+        rt.set_only_phones_watches(false);
+        let s = rt.state();
+        assert!(!s.only_phones_watches);
+        assert_eq!(s.nearby.len(), 3);
+        assert_eq!(s.hidden_count, 0);
+        // 依名稱排序：AirPods Pro、Pixel Phone、未命名裝置 mystery
+        let ids: Vec<&str> = s.nearby.iter().map(|d| d.id.as_str()).collect();
+        assert_eq!(ids, vec!["buds", "other", "mystery"]);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn order_does_not_change_with_signal_strength() {
+        let order = |other: i32, buds: i32| -> Vec<String> {
+            let rt = runtime_with(other, buds);
+            rt.set_only_phones_watches(false);
+            rt.state().nearby.into_iter().map(|d| d.id).collect()
+        };
+        // 誰比較近都不影響順序
+        assert_eq!(order(-40, -90), order(-90, -40));
+        assert_eq!(order(-40, -90), vec!["buds", "other", "mystery"]);
     }
 
     #[test]
@@ -283,6 +344,16 @@ mod tests {
         let rt = runtime();
         rt.set_distance(2.3);
         assert_eq!(rt.state().distance_m, 2.5);
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn filter_cannot_be_turned_off_in_release() {
+        let rt = runtime();
+        rt.set_only_phones_watches(false);
+        let s = rt.state();
+        assert!(s.only_phones_watches);
+        assert_eq!(s.nearby.len(), 1);
     }
 
     #[cfg(debug_assertions)]

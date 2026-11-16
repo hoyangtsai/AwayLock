@@ -15,6 +15,6 @@ pub mod ports;
 pub mod settings;
 
 pub use allowlist::{AllowList, AllowedDevice};
-pub use device::NearbyDevice;
+pub use device::{DeviceKind, NearbyDevice};
 pub use monitor::{Action, Monitor, MonitorConfig, Phase, Presence, Snapshot};
 pub use settings::Settings;

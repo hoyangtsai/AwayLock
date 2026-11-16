@@ -100,6 +100,9 @@ struct GeneralView: View {
 
 struct DevicesView: View {
     @ObservedObject private var core = Core.shared
+    #if DEBUG
+    @ObservedObject private var settings = AppSettings.shared
+    #endif
 
     var body: some View {
         List {
@@ -125,6 +128,19 @@ struct DevicesView: View {
             }
 
             Section {
+                #if DEBUG
+                // 僅開發版且開啟 Debug 模式時，才能選擇顯示全部裝置
+                if settings.debugMode {
+                    Toggle("只顯示手機與手錶（關閉＝顯示全部裝置）", isOn: Binding(
+                        get: { core.state.onlyPhonesWatches },
+                        set: { core.setOnlyPhonesWatches($0) }))
+                    if core.state.onlyPhonesWatches && core.state.hiddenCount > 0 {
+                        Text("已隱藏 \(core.state.hiddenCount) 個其他裝置。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                #endif
                 if !core.state.bluetoothReady {
                     Text(core.state.bluetoothStatus).foregroundStyle(.orange)
                 }
@@ -143,7 +159,7 @@ struct DevicesView: View {
             } header: {
                 Text("附近的裝置（\(core.state.bluetoothStatus)）")
             } footer: {
-                Text("提示：把手機或手錶靠近 Mac，距離最近的通常就是它。Apple 裝置的識別碼會定期更換，更換後需要重新加入。")
+                Text("這裡只列出名稱顯示為手機或手錶的裝置。把手機或手錶靠近 Mac，距離最近的通常就是它。Apple 裝置的識別碼會定期更換，更換後需要重新加入。")
                     .font(.caption)
             }
         }
@@ -208,9 +224,10 @@ struct DebugView: View {
                                     Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
                                 }
                                 Spacer()
-                                Text(x.isApple ? "Apple" : "").foregroundStyle(.secondary)
+                                Text((x.isApple ? "Apple · " : "") + x.kind).foregroundStyle(.secondary)
                             }
-                            Text("\(x.rssi) dBm · 約 \(formatMeters(x.distanceM)) · \(x.ageSecs) 秒前")
+                            Text("\(x.rssi) dBm · 約 \(formatMeters(x.distanceM)) · \(x.ageSecs) 秒前"
+                                 + (x.appleTypes.isEmpty ? "" : " · 類型 \(x.appleTypes)"))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                             Text(x.id)

@@ -43,6 +43,20 @@ impl Runtime {
         config::save_settings(&st.settings);
     }
 
+    /// 「附近的裝置」是否只顯示手機與手錶。
+    ///
+    /// 只有開發版能關閉過濾（看全部裝置）；發布版一律只顯示手機與手錶，這個函式不做任何事。
+    pub fn set_only_phones_watches(&self, on: bool) {
+        #[cfg(debug_assertions)]
+        {
+            let mut st = self.shared.lock().unwrap();
+            st.settings.only_phones_watches = on;
+            config::save_settings(&st.settings);
+        }
+        #[cfg(not(debug_assertions))]
+        let _ = on;
+    }
+
     pub fn add_device(&self, id: &str, name: &str) {
         let mut st = self.shared.lock().unwrap();
         if st.allowlist.add(id, name) {
