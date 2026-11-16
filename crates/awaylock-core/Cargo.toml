@@ -1,0 +1,11 @@
+[package]
+name = "awaylock-core"
+version.workspace = true
+edition.workspace = true
+description = "AwayLock 核心邏輯：距離換算、允許列表、鎖定判定。不依賴任何作業系統 API。"
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

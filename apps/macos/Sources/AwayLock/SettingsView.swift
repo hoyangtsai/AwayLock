@@ -14,6 +14,7 @@ enum TabSize {
 struct GeneralView: View {
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
     @State private var errorMessage: String?
+    @ObservedObject private var core = Core.shared
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
@@ -64,9 +65,9 @@ struct GeneralView: View {
 
     private var thresholdSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("離開距離：約 \(String(format: "%.1f", settings.distanceMeters)) 公尺")
-            Slider(value: Binding(get: { settings.distanceMeters },
-                                  set: { settings.distanceMeters = ($0 * 2).rounded() / 2 }),
+            Text("離開距離：約 \(String(format: "%.1f", core.state.distanceM)) 公尺")
+            Slider(value: Binding(get: { core.state.distanceM },
+                                  set: { core.setDistance($0) }),
                    in: 0.5...5, step: 0.5) {
                 EmptyView()
             } minimumValueLabel: {
@@ -98,21 +99,16 @@ struct GeneralView: View {
 // MARK: - Devices
 
 struct DevicesView: View {
-    @ObservedObject private var scanner = BLEScanner.shared
-    @ObservedObject private var allowList = AllowList.shared
-
-    private var candidates: [NearbyDevice] {
-        scanner.nearby.filter { !allowList.contains($0.id) }
-    }
+    @ObservedObject private var core = Core.shared
 
     var body: some View {
         List {
             Section {
-                if allowList.devices.isEmpty {
+                if core.state.allowed.isEmpty {
                     Text("尚未加入任何裝置。加入後，只有這些裝置離開時才會鎖定。")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(allowList.devices) { a in
+                ForEach(core.state.allowed) { a in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(a.name)
@@ -121,7 +117,7 @@ struct DevicesView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("移除") { allowList.remove(id: a.id) }
+                        Button("移除") { core.remove(id: a.id) }
                     }
                 }
             } header: {
@@ -129,25 +125,23 @@ struct DevicesView: View {
             }
 
             Section {
-                if !scanner.statusText.isEmpty && scanner.statusText != "掃描中" {
-                    Text(scanner.statusText).foregroundStyle(.orange)
+                if !core.state.bluetoothReady {
+                    Text(core.state.bluetoothStatus).foregroundStyle(.orange)
                 }
-                ForEach(candidates) { d in
+                ForEach(core.state.nearby) { d in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(d.displayName)
-                            Text("約 \(formatMeters(estimatedMeters(rssi: d.rssi)))" + (d.isApple ? " · Apple" : ""))
+                            Text(d.name)
+                            Text("約 \(formatMeters(d.distanceM))" + (d.isApple ? " · Apple" : ""))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("加入") {
-                            allowList.add(id: d.id, name: d.displayName)
-                        }
+                        Button("加入") { core.add(id: d.id, name: d.name) }
                     }
                 }
             } header: {
-                Text("附近的裝置（\(scanner.statusText)）")
+                Text("附近的裝置（\(core.state.bluetoothStatus)）")
             } footer: {
                 Text("提示：把手機或手錶靠近 Mac，距離最近的通常就是它。Apple 裝置的識別碼會定期更換，更換後需要重新加入。")
                     .font(.caption)
@@ -156,10 +150,9 @@ struct DevicesView: View {
         .frame(width: TabSize.devices.width, height: TabSize.devices.height)
     }
 
-    private func statusText(for a: AllowedDevice) -> String {
-        guard let d = scanner.device(a.id),
-              Date().timeIntervalSince(d.lastSeen) < 15 else { return "未偵測到" }
-        return "在附近 · 約 \(formatMeters(estimatedMeters(rssi: d.rssi)))"
+    private func statusText(for a: AllowedInfo) -> String {
+        guard a.seen, let m = a.distanceM else { return "未偵測到" }
+        return "在附近 · 約 \(formatMeters(m))"
     }
 }
 
@@ -167,83 +160,82 @@ struct DevicesView: View {
 
 #if DEBUG
 struct DebugView: View {
-    @ObservedObject private var scanner = BLEScanner.shared
-    @ObservedObject private var allowList = AllowList.shared
-    @ObservedObject private var monitor = ProximityMonitor.shared
-    @ObservedObject private var settings = AppSettings.shared
-
-    private static let timeFormat: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
-    }()
+    @ObservedObject private var core = Core.shared
 
     var body: some View {
         List {
-            Section("離開判定") {
-                row("離開距離（可在 General 調整）",
-                    "\(String(format: "%.1f", settings.distanceMeters)) 公尺 ≈ \(settings.threshold) dBm")
-                row("Mac 藍牙", scanner.statusText)
-                row("允許的裝置數", "\(allowList.devices.count)")
-                row("電腦狀態", monitor.isLocked ? "已鎖定" : "已解鎖")
-                row("本次解鎖期間見過的允許裝置", "\(monitor.armedIDs.count) / \(allowList.devices.count)")
-                row("連續離開次數（監控中裝置）", "\(monitor.missCount) / \(monitor.requiredMisses)")
-                row("最近檢查", monitor.lastCheck.map { Self.timeFormat.string(from: $0) } ?? "—")
-                row("判定", monitor.decision)
-                row("檢查間隔 / 失聯判定", "\(Int(monitor.interval)) 秒 / \(Int(monitor.staleAfter)) 秒")
-            }
-
-            Section("允許的裝置（即時）") {
-                if allowList.devices.isEmpty {
-                    Text("無").foregroundStyle(.secondary)
+            if let d = core.debug {
+                Section("離開判定") {
+                    row("離開距離（可在 General 調整）",
+                        "\(String(format: "%.1f", d.distanceM)) 公尺 ≈ \(d.thresholdDbm) dBm")
+                    row("Mac 藍牙", d.bluetoothStatus)
+                    row("電腦狀態", d.phase)
+                    row("本次解鎖期間見過的允許裝置", "\(d.armedCount) / \(d.allowedCount)")
+                    row("連續離開次數（監控中裝置）", "\(d.maxMisses) / \(d.requiredMisses)")
+                    row("最近檢查", d.lastCheckSecs.map { "\($0) 秒前" } ?? "—")
+                    row("判定", d.decision)
+                    row("檢查間隔 / 失聯判定", "\(d.tickSecs) 秒 / \(d.staleSecs) 秒")
                 }
-                ForEach(allowList.devices) { a in
-                    let result = monitor.evaluate(a)
-                    let d = scanner.device(a.id)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(a.name)
-                            Spacer()
-                            Text(result.present ? "在範圍內" : "離開")
-                                .foregroundStyle(result.present ? .green : .red)
-                        }
-                        Text(detailLine(d) + " · " + result.reason
-                             + (monitor.armedIDs.contains(a.id) ? " · 監控中" : " · 尚未見過"))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        Text(a.id.uuidString)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.tertiary)
+
+                Section("允許的裝置（即時）") {
+                    if d.allowed.isEmpty {
+                        Text("無").foregroundStyle(.secondary)
                     }
-                }
-            }
-
-            Section("掃描到的所有裝置（\(scanner.nearby.count)）") {
-                ForEach(scanner.nearby) { d in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(d.displayName)
-                            if allowList.contains(d.id) {
-                                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                    ForEach(d.allowed) { a in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(a.name)
+                                Spacer()
+                                Text(a.present ? "在範圍內" : "離開")
+                                    .foregroundStyle(a.present ? .green : .red)
                             }
-                            Spacer()
-                            Text(d.isApple ? "Apple" : "").foregroundStyle(.secondary)
+                            Text(allowedLine(a))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Text(a.id)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.tertiary)
                         }
-                        Text(detailLine(d))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        Text(d.id.uuidString)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.tertiary)
                     }
                 }
+
+                Section("掃描到的所有裝置（\(d.all.count)）") {
+                    ForEach(d.all) { x in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(x.name)
+                                if x.allowed {
+                                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                                }
+                                Spacer()
+                                Text(x.isApple ? "Apple" : "").foregroundStyle(.secondary)
+                            }
+                            Text("\(x.rssi) dBm · 約 \(formatMeters(x.distanceM)) · \(x.ageSecs) 秒前")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Text(x.id)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            } else {
+                Text("尚無資料").foregroundStyle(.secondary)
             }
         }
         .frame(width: TabSize.debug.width, height: TabSize.debug.height)
     }
 
-    private func detailLine(_ d: NearbyDevice?) -> String {
-        guard let d else { return "無資料" }
-        let age = Int(Date().timeIntervalSince(d.lastSeen))
-        return "\(d.rssi) dBm · 約 \(formatMeters(estimatedMeters(rssi: d.rssi))) · \(age) 秒前"
+    private func allowedLine(_ a: DebugAllowed) -> String {
+        var parts: [String] = []
+        if let rssi = a.rssi, let m = a.distanceM, let age = a.ageSecs {
+            parts.append("\(rssi) dBm · 約 \(formatMeters(m)) · \(age) 秒前")
+        } else {
+            parts.append("無資料")
+        }
+        parts.append(a.reason)
+        parts.append(a.armed ? "監控中" : "尚未見過")
+        return parts.joined(separator: " · ")
     }
 
     private func row(_ title: String, _ value: String) -> some View {

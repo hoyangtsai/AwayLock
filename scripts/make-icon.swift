@@ -1,4 +1,4 @@
-// 產生 App 圖示：swift scripts/make-icon.swift Resources/AppIcon.icns
+// 產生 App 圖示：swift scripts/make-icon.swift assets/AppIcon.icns
 import AppKit
 
 func render(pixels: Int) -> Data {

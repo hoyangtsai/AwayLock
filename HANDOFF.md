@@ -3,54 +3,77 @@
 最後更新：2026-11-16
 
 ## 專案概述
-macOS 狀態列 App。電腦解鎖期間，只要曾被掃描到的「允許裝置」（iPhone / Apple Watch / 藍牙配件）
+狀態列 App。電腦解鎖期間，只要曾被掃描到的「允許裝置」（iPhone / Apple Watch / 藍牙配件）
 其中任何一個超過設定距離或突然掃描不到，就自動鎖定螢幕。
 
-- 語言與框架：Swift 5.9、SwiftUI + AppKit、CoreBluetooth、Swift Package（沒有 .xcodeproj）
-- 最低系統：macOS 13
+- **核心邏輯已用 Rust 重寫並分層**（原本全是 Swift），為未來支援 Linux 做準備。
+- **macOS 介面維持 Swift 原生（SwiftUI / AppKit）**，因為 egui 做不出原生外觀（使用者要求視窗和原本的 Swift 版一樣）。
+  Swift 透過 C 介面呼叫 Rust。
 - 路徑：`~/Developer/AwayLock`
 
+## 架構（依賴方向：介面 → runtime → platform → core）
+| 位置 | 職責 |
+|---|---|
+| `crates/awaylock-core` | 純邏輯，無作業系統依賴：距離換算、裝置、允許列表、設定、鎖定判定狀態機（`monitor.rs`）、平台要實作的 trait（`ports.rs`）。**23 個單元測試。** |
+| `crates/awaylock-platform` | 實作 core 的 trait。藍牙用 btleplug（macOS / Linux 共用）；鎖定、鎖定狀態、開機啟動依平台用 `cfg(target_os)` 切換。 |
+| `crates/awaylock-runtime` | 組合 core 與 platform：背景檢查執行緒、設定與允許列表存檔、給介面用的狀態檢視（`view.rs`，JSON）。**3 個測試**（含「一般狀態不含 dBm」）。 |
+| `crates/awaylock-ffi` | C 介面（cdylib）。函式見 `apps/macos/Sources/CAwayLock/include/awaylock.h`，狀態以 JSON 字串傳遞。 |
+| `apps/macos` | Swift 原生介面（狀態列、設定視窗）。`Core.swift` 每秒輪詢 Rust 取得狀態。 |
+| `crates/awaylock-app` | egui 備用介面，**預留給 Linux**；macOS 不使用，也沒有維護到與 Swift 版同等。 |
+
+新增平台時，只需在 `awaylock-platform` 補實作；Linux 介面可用 `awaylock-app`（egui）或另外做 GTK/Qt。
+
 ## 目前功能
-- 狀態列圖示（不在 Dock）。左鍵選單只有 **Settings**、**Quit**。
+- 狀態列圖示（不在 Dock，`LSUIElement`）。左鍵選單只有 **Settings**、**Quit**。
 - 啟動時顯示設定視窗，工具列樣式分頁：
-  - **General**：開機時啟動、離開距離滑桿（0.5～5 公尺，每格 0.5）、Quit 按鈕
-  - **Devices**：掃描附近 BLE 裝置、維護「允許列表」（加入／移除）
-  - **Debug**：只存在開發版，顯示掃描與判定細節（含 dBm）
+  - **General**：開機時啟動（Swift 的 `SMAppService`）、離開距離滑桿（0.5～5 公尺，每格 0.5）、Quit
+  - **Devices**：掃描附近 BLE 裝置、維護允許列表
+  - **Debug**：只存在開發版，含 dBm 與判定細節
   - **About**
 - 一般使用者介面只顯示公尺，不顯示 dBm。
+- 距離與允許列表由 Rust 存成 JSON（`directories` crate 決定位置；開發版與發布版用不同資料夾）。
+  測試用環境變數 `AWAYLOCK_CONFIG_DIR` 指向暫存資料夾，避免動到使用者設定。
 
-## 鎖定規則（`ProximityMonitor.swift`）
-1. 電腦每次解鎖（監聽 `com.apple.screenIsUnlocked`）開始一段新的監控期間。
+## 鎖定規則（`crates/awaylock-core/src/monitor.rs`）
+1. 電腦每次解鎖開始一段新的監控期間（以輪詢鎖定狀態偵測，每 5 秒一次）。
 2. 期間內，允許裝置被掃描到且在距離內，就「列入監控」。
-3. 列入監控的裝置中，任一個連續 3 次檢查（每 5 秒一次）都超距或掃描不到（超過 15 秒沒收到廣播），就鎖定。
+3. 列入監控的裝置中，任一個連續 3 次檢查都超距或掃描不到（超過 15 秒沒收到廣播），就鎖定。
 4. 從未在該期間被掃描到的裝置不會觸發鎖定。
-5. 鎖定後清空監控名單；下次解鎖重新開始。
-6. 鎖定方式：`pmset displaysleepnow`，需要「系統設定 → 鎖定畫面 → 需要密碼」設為「立即」。
+5. 發出鎖定指令後進入「等待鎖定生效」，電腦真的鎖定後才進入「已鎖定」，再解鎖才重新開始；
+   20 秒內電腦沒鎖定（例如沒設「需要密碼：立即」）就放棄等待並重新開始。
 
-距離由 RSSI 粗估：`d = 10^((-59 - rssi) / 25)`（1 公尺約 -59 dBm、環境係數 2.5）。
-距離設定換算回門檻：`rssi = -59 - 25 * log10(公尺)`。誤差很大，僅供參考。
+距離由 RSSI 粗估：`d = 10^((-59 - rssi) / 25)`；距離設定換算門檻：`rssi = -59 - 25 * log10(公尺)`。誤差很大，僅供參考。
 
 ## 建置與執行
 ```bash
-./build.sh dev       # 開發版 → build/AwayLock Dev.app（含 Debug，bundle id com.awaylock.app.dev）
-./build.sh release   # 發布版 → build/AwayLock.app（不含任何 Debug 程式碼，bundle id com.awaylock.app）
+scripts/bundle-macos.sh dev       # 開發版 → dist/AwayLock Dev.app（含 Debug，bundle id com.awaylock.app.dev）
+scripts/bundle-macos.sh release   # 發布版 → dist/AwayLock.app（不含 Debug 程式碼）
+cargo test --workspace            # 核心邏輯與狀態檢視測試
 ```
-- Debug 程式碼以 `#if DEBUG` 包住；發布版已用 `strings` 確認不含 Debug 字串。
-- 兩者 ad-hoc 簽章。每次重新編譯後簽章會變，可能需要重新授權藍牙。
-- App 圖示由 `scripts/make-icon.swift` 產生 `Resources/AppIcon.icns`。
-- 「開機時啟動」使用 `SMAppService.mainApp`，App 需放在 `/Applications` 才可靠。
+- 腳本流程：`cargo build -p awaylock-ffi` → Swift 連結 `libawaylock_ffi.dylib` → 組成 `.app`
+  （執行檔在 `Contents/MacOS`，動態庫在 `Contents/Frameworks`，rpath 為 `@executable_path/../Frameworks`）。
+- **必須用 .app 執行**：沒有 `Info.plist` 的藍牙權限說明會被系統直接中止（exit 134）。
+  這也表示在 Claude 的沙盒終端機直接執行 Rust 二進位檔會中止，不是程式 bug。
+- **根目錄 `Cargo.toml` 的 `[profile.release] strip = "none"` 不能刪**：cargo 預設會對 release 動態庫做 strip，
+  Xcode 的連結器會拒絕（`mis-aligned LINKEDIT string pool`）。
+- `awaylock-ffi/build.rs` 在連結時設定 `-install_name @rpath/libawaylock_ffi.dylib`，不要改用 `install_name_tool`
+  事後修改（同樣會破壞檔案）。
+- 發布版已用 `strings` 確認 Swift 執行檔與 Rust 動態庫都不含 Debug 字串。
+- 兩者 ad-hoc 簽章；每次重新編譯後可能需要重新授權藍牙。
+- 「開機時啟動」需要 App 放在 `/Applications` 才可靠。
+- App 圖示：`scripts/make-icon.swift` 產生 `assets/AppIcon.icns`。
 
-## 檔案結構
-| 檔案 | 用途 |
-|---|---|
-| `Sources/AwayLock/main.swift` | 進入點（accessory 模式） |
-| `AppDelegate.swift` | 狀態列圖示、選單、設定視窗 |
-| `SettingsWindow.swift` | 工具列分頁控制器，Debug 分頁動態加入／移除 |
-| `SettingsView.swift` | General / Devices / Debug / About 各分頁畫面 |
-| `BLEScanner.swift` | CoreBluetooth 持續掃描，RSSI 以 0.7/0.3 平滑 |
-| `AllowList.swift` | 允許列表（UserDefaults） |
-| `AppSettings.swift` | 距離設定、Debug 開關、距離估算公式 |
-| `ProximityMonitor.swift` | 鎖定判定邏輯 |
+## 驗證狀態
+- **已驗證**：Rust 核心與狀態檢視共 26 個測試通過；開發版與發布版都能編譯、打包並啟動；
+  Swift 設定視窗的 General 分頁畫面與原本 Swift 版相同（原生工具列分頁、Debug 分頁在開發版出現）；
+  發布版不含 Debug 字串。
+- **未驗證**：
+  - 藍牙掃描實際結果（btleplug 在 macOS 是否持續回報 RSSI 更新）
+  - Swift 與 Rust 之間的資料流在畫面上的呈現（Devices / Debug 分頁的實際內容）
+  - 實際鎖定行為、鎖定／解鎖偵測（`CGSSessionScreenIsLocked`）
+  - 「開機時啟動」
+  - **Linux 完全未編譯、未測試**（`loginctl`、BlueZ、狀態列圖示在 GNOME 需擴充套件）；`awaylock-app` 在 macOS 能編譯，
+    但沒有經過完整驗證。
 
 ---
 
@@ -64,7 +87,7 @@ iPhone / Apple Watch 加入允許列表後，過一段時間會變成「掃描�
 - Apple 裝置的 BLE 廣播使用隨機私有位址（resolvable private address），為了防追蹤會定期更換。
   一般認為約每 **15 分鐘**一次，並可能在螢幕亮起、鎖定狀態改變時提早更換。
   **此週期未在使用者的裝置上實測。**
-- CoreBluetooth 提供的 `peripheral.identifier` 由位址換算而來。位址一換，識別碼就變。
+- btleplug / CoreBluetooth 提供的識別碼由位址換算而來。位址一換，識別碼就變。
   對未配對的裝置，系統無法把新舊位址對應回同一台裝置。
 - 允許列表存的是舊識別碼，所以舊的會永遠掃描不到。
 
@@ -75,31 +98,25 @@ iPhone / Apple Watch 加入允許列表後，過一段時間會變成「掃描�
 ### 已排除的做法
 | 做法 | 結果 |
 |---|---|
-| 與 Mac 藍牙配對 iPhone 以讀 RSSI（`IOBluetoothDevice`） | iPhone 端顯示「配對失敗：不支援 Mac」，行不通。Apple Watch 本來也不能獨立與 Mac 配對 |
-| 對已配對裝置主動 `openConnection()` | 會不斷在 iPhone / Mac 觸發配對請求視窗。已移除 |
+| 與 Mac 藍牙配對 iPhone 以讀 RSSI | iPhone 端顯示「配對失敗：不支援 Mac」，行不通。Apple Watch 本來也不能獨立與 Mac 配對 |
+| 對已配對裝置主動連線 | 會不斷在 iPhone / Mac 觸發配對請求視窗（舊 Swift 版踩過） |
 | 用同一 Apple ID 辨識裝置 | 沒有公開 API 可列出同 Apple ID 的裝置，Find My / Continuity 不開放第三方 |
-| CoreBluetooth 查系統配對清單 | 沒有此 API，識別碼為 App 專用的隨機值 |
+| 查系統配對清單 | CoreBluetooth 沒有此 API，識別碼為 App 專用的隨機值 |
 | Nearby Interaction（UWB） | 需要兩端都有 UWB。據我所知 Mac 沒有 UWB 晶片，不適用（**未實際驗證**） |
 
 ### 可行方向（待決定）
-1. **iPhone 配套 App（最準確）**
-   iPhone 端做一個小 App，以固定的自訂 service UUID 持續廣播（可背景執行）。
-   Mac 端只認這個 UUID，不受位址更換影響，且不會誤判別人的 Apple 裝置。
+1. **iPhone 配套 App（最準確）**：iPhone 端以固定的自訂 service UUID 持續廣播，Mac 端只認這個 UUID。
    代價：要另外開發 iOS App；免費 Apple ID 簽署每 7 天要重新安裝；Apple Watch 仍偵測不到。
-2. **改用固定位址的配件**
-   把不換位址的藍牙裝置放進允許列表。不需改程式，但要使用者隨身帶那個配件。
-3. **維持現狀並降低誤鎖**
-   在識別碼更換時自動重新綁定（例如以廣播內容或訊號特徵比對）。可靠度低，**尚未驗證可行**。
-4. **接受限制**
-   僅文件化提醒使用者，Apple 裝置需定期重新加入。
+2. **改用固定位址的配件**：把不換位址的藍牙裝置放進允許列表。不需改程式。
+3. **自動重新綁定**：識別碼更換時以廣播內容或訊號特徵比對。可靠度低，**尚未驗證可行**。
+4. **接受限制**：僅文件化提醒使用者，Apple 裝置需定期重新加入。
 
 ### 建議的下一步
 1. 用開發版 Debug 分頁實測：記下 iPhone 識別碼前幾碼，隔 10～20 分鐘再看是否換了，確認實際週期。
 2. 依實測結果決定走方向 1 或 2。
 
-## 其他待辦／未驗證
-- 設定視窗的實際外觀、藍牙掃描結果、實際鎖定行為，都只確認過「編譯成功並能啟動」，沒有實機驗證。
-- 「開機時啟動」尚未在 `/Applications` 下測試。
-- 鎖定使用 `pmset displaysleepnow`，是否在所有 macOS 版本都會要求密碼待確認。
+## 其他待辦
 - 發布前需正式簽章與公證（目前僅 ad-hoc 簽章）。
-- 專案尚未建立 git repository。
+- 補上授權（LICENSE）。
+- Linux：補編譯驗證，決定介面方案（egui 或 GTK/Qt），評估狀態列圖示。
+- 專案尚未推送到 GitHub（`origin` 已設為 `git@github.com:hoyangtsai/AwayLock.git`），變更也尚未 commit。

@@ -4,13 +4,11 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var window: NSWindow?
-    private let monitor = ProximityMonitor.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        _ = BLEScanner.shared   // 開始掃描（首次會要求藍牙權限）
+        Core.shared.start()   // 啟動 Rust 核心：藍牙掃描與鎖定判定（首次會要求藍牙權限）
         setUpStatusItem()
-        showSettings()      // 剛啟動時顯示視窗
-        monitor.start()
+        showSettings()        // 剛啟動時顯示視窗
     }
 
     // 關閉視窗後 App 繼續留在狀態列

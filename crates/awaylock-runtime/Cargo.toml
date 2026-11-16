@@ -1,0 +1,12 @@
+[package]
+name = "awaylock-runtime"
+version.workspace = true
+edition.workspace = true
+description = "AwayLock 執行層：把核心與平台層組起來（背景檢查、設定存取、給介面用的狀態檢視）。供各種介面（Swift 原生、egui）共用。"
+
+[dependencies]
+awaylock-core = { workspace = true }
+awaylock-platform = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+directories = "5"

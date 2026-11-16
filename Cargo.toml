@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/awaylock-core",
+    "crates/awaylock-platform",
+    "crates/awaylock-runtime",
+    "crates/awaylock-ffi",
+    "crates/awaylock-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+awaylock-core = { path = "crates/awaylock-core" }
+awaylock-platform = { path = "crates/awaylock-platform" }
+awaylock-runtime = { path = "crates/awaylock-runtime" }
+
+
+[profile.release]
+# 不要讓 cargo 對動態函式庫執行 strip：Xcode 的連結器會拒絕被 strip 過的 Rust dylib（mis-aligned LINKEDIT）
+strip = "none"

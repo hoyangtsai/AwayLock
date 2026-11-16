@@ -1,0 +1,15 @@
+[package]
+name = "awaylock-platform"
+version.workspace = true
+edition.workspace = true
+description = "AwayLock 平台層：實作 core 定義的埠（藍牙掃描、鎖定螢幕、鎖定狀態、開機啟動），依 macOS / Linux 切換。"
+
+[dependencies]
+awaylock-core = { workspace = true }
+btleplug = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+futures = "0.3"
+auto-launch = "0.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
