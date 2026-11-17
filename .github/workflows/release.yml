@@ -1,6 +1,7 @@
 name: Release
 
-# main 有新 commit（程式碼變更）就打包、發佈 GitHub Release，並更新 Homebrew tap。
+# On every code change pushed to main: package the app, publish a GitHub Release,
+# and update the Homebrew tap.
 on:
   push:
     branches: [main]
@@ -8,53 +9,53 @@ on:
       - "**.md"
       - ".gitignore"
 
-# 同時只跑一個，避免版本號與 tap 更新互相競爭
+# Run one at a time to avoid races on version numbers and tap updates
 concurrency:
   group: release
   cancel-in-progress: false
 
 permissions:
-  contents: write # 建立 Release 與 tag
+  contents: write # Create the release and tag
 
 jobs:
   release:
-    runs-on: macos-14 # Apple Silicon（cask 目前限定 arm64）
+    runs-on: macos-14 # Apple Silicon (the cask is currently arm64-only)
     steps:
       - uses: actions/checkout@v4
 
-      - name: 檢查 tap 權杖
+      - name: Check tap token
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
           if [ -z "$TAP_TOKEN" ]; then
-            echo "::error::缺少 secret TAP_TOKEN（需要對 hoyangtsai/homebrew-app 有寫入權限的 PAT）"
+            echo "::error::Missing secret TAP_TOKEN (a PAT with write access to hoyangtsai/homebrew-app)"
             exit 1
           fi
 
-      - name: 安裝 Rust
+      - name: Install Rust
         run: rustup toolchain install stable --profile minimal
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: 測試
+      - name: Test
         run: cargo test --workspace
 
-      - name: 決定版本號
+      - name: Determine version
         id: ver
         run: |
-          # 基礎版本取自 Info.plist 的 major.minor，patch 用 run number 自動遞增
+          # Take major.minor from Info.plist; the patch number is the workflow run number
           BASE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' packaging/macos/Info.plist)"
           VERSION="${BASE%.*}.${GITHUB_RUN_NUMBER}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "版本：$VERSION"
+          echo "Version: $VERSION"
 
-      - name: 打包
+      - name: Package
         env:
           AWAYLOCK_VERSION: ${{ steps.ver.outputs.version }}
           AWAYLOCK_BUILD: ${{ github.run_number }}
         run: scripts/package-macos.sh
 
-      - name: 建立 GitHub Release
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
@@ -64,7 +65,7 @@ jobs:
             --title "awaylock $VERSION" \
             --generate-notes
 
-      - name: 更新 Homebrew tap
+      - name: Update Homebrew tap
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
