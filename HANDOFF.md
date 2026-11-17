@@ -1,4 +1,4 @@
-# AwayLock 交接文件
+# awaylock 交接文件
 
 最後更新：2026-11-16
 
@@ -17,7 +17,7 @@
 | `crates/awaylock-core` | 純邏輯，無作業系統依賴：距離換算、裝置、允許列表、設定、鎖定判定狀態機（`monitor.rs`）、平台要實作的 trait（`ports.rs`）。**23 個單元測試。** |
 | `crates/awaylock-platform` | 實作 core 的 trait。藍牙用 btleplug（macOS / Linux 共用）；鎖定、鎖定狀態、開機啟動依平台用 `cfg(target_os)` 切換。 |
 | `crates/awaylock-runtime` | 組合 core 與 platform：背景檢查執行緒、設定與允許列表存檔、給介面用的狀態檢視（`view.rs`，JSON）。**3 個測試**（含「一般狀態不含 dBm」）。 |
-| `crates/awaylock-ffi` | C 介面（cdylib）。函式見 `apps/macos/Sources/CAwayLock/include/awaylock.h`，狀態以 JSON 字串傳遞。 |
+| `crates/awaylock-ffi` | C 介面（cdylib）。函式見 `apps/macos/Sources/cawaylock/include/awaylock.h`，狀態以 JSON 字串傳遞。 |
 | `apps/macos` | Swift 原生介面（狀態列、設定視窗）。`Core.swift` 每秒輪詢 Rust 取得狀態。 |
 | `crates/awaylock-app` | egui 備用介面，**預留給 Linux**；macOS 不使用，也沒有維護到與 Swift 版同等。 |
 
@@ -54,8 +54,8 @@
 
 ## 建置與執行
 ```bash
-scripts/bundle-macos.sh dev       # 開發版 → dist/AwayLock Dev.app（含 Debug，bundle id com.awaylock.app.dev）
-scripts/bundle-macos.sh release   # 發布版 → dist/AwayLock.app（不含 Debug 程式碼）
+scripts/bundle-macos.sh dev       # 開發版 → dist/awaylock Dev.app（含 Debug，bundle id com.awaylock.app.dev）
+scripts/bundle-macos.sh release   # 發布版 → dist/awaylock.app（不含 Debug 程式碼）
 cargo test --workspace            # 核心邏輯與狀態檢視測試
 ```
 - 腳本流程：`cargo build -p awaylock-ffi` → Swift 連結 `libawaylock_ffi.dylib` → 組成 `.app`
@@ -122,11 +122,78 @@ iPhone / Apple Watch 加入允許列表後，過一段時間會變成「掃描�
 4. **接受限制**：僅文件化提醒使用者，Apple 裝置需定期重新加入。
 
 ### 建議的下一步
-1. 用開發版 Debug 分頁實測：記下 iPhone 識別碼前幾碼，隔 10～20 分鐘再看是否換了，確認實際週期。
+1. 照下面「實測：iPhone 識別碼更換週期」的步驟實測，把結果填進記錄表。
 2. 依實測結果決定走方向 1 或 2。
+
+### 實測：iPhone 識別碼更換週期
+
+**狀態：尚未實測，下面記錄表是空的。** 週期（約 15 分鐘）只是一般說法，沒有在這台 iPhone 上驗證。
+
+#### 準備
+1. `scripts/bundle-macos.sh dev`，開啟 `dist/awaylock Dev.app`（只有開發版有 Debug 分頁）。
+2. General 分頁勾選「Debug 模式」，出現 **Debug** 分頁。
+3. Mac 不要睡眠（接電源、插上不要闔蓋；可用 `caffeinate -d` 在終端機跑著）。藍牙保持開啟。
+4. iPhone 放在 Mac 旁邊約 0.5～1 公尺，**不要與 Mac 配對**，也先不要把它加入允許列表。
+
+#### 怎麼看
+Debug 分頁的「掃描到的所有裝置」依名稱排序，每個裝置有三行：
+- 第一行：名稱、是否 Apple、推測種類
+- 第二行：`dBm · 距離 · N 秒前 · 類型 xx xx`（類型是 Apple 廣播代碼）
+- 第三行：**識別碼**（UUID，這就是要追蹤的東西）
+
+要追蹤的是 iPhone 那一筆。名稱含「iPhone」的通常就是；如果名稱消失，找「Apple、類型相同、訊號強度跟之前差不多」的未命名項目。
+
+#### 步驟
+1. 記下現在時間，以及 iPhone 識別碼的**前 8 碼**（例如 `3F2A91C4`）。
+2. 之後每 **5 分鐘**回來看一次（至少看 45 分鐘；想看夜間行為可以放更久），每次記一列：時間、iPhone 目前的識別碼前 8 碼、舊識別碼那筆「N 秒前」是否一直增加（代表舊的已不再出現）。
+3. 看到識別碼變了：記下**精確時間**（舊的最後一次出現、新的第一次出現），並注意新那筆有沒有名稱、類型代碼是否與舊的相同。
+4. 重複幾輪，得到連續幾次的更換間隔。
+
+#### 建議分組對照（各做一輪，每輪至少 45 分鐘）
+| 情境 | 目的 |
+|---|---|
+| A. iPhone 螢幕鎖定、放著不動 | 看基本週期 |
+| B. 每隔幾分鐘喚醒螢幕、解鎖一下 | 看喚醒、解鎖是否會提早換 |
+| C. iPhone 開飛航模式再關閉藍牙、重開藍牙 | 看開關藍牙是否強制換 |
+| D. Apple Watch 同時觀察 | 手錶的週期可能不同 |
+
+#### 記錄表（實測時填寫）
+| 日期時間 | 情境 | 舊識別碼前 8 碼 | 新識別碼前 8 碼 | 距上次更換（分鐘） | 新那筆有名稱？ | 備註 |
+|---|---|---|---|---|---|---|
+| | | | | | | |
+
+#### 結論（實測後填寫）
+- 一般情境的更換週期：＿＿ 分鐘
+- 喚醒／解鎖是否提早換：＿＿
+- 開關藍牙是否強制換：＿＿
+- 新識別碼是否有名稱（影響一般模式的列表是否看得到）：＿＿
+- Apple Watch 的週期：＿＿
+- 據此決定的方向：＿＿
+
+#### 注意
+- Mac 的藍牙識別碼是 CoreBluetooth 依對方位址換算的，**同一個位址在不同 Mac 上不同**；請在同一台 Mac 上比對。
+- 如果舊識別碼仍然「N 秒前」很小、卻同時出現新的，表示 iPhone 可能同時廣播兩個位址（例如不同類型的廣播），不能直接當成「已更換」，請把這情況另外記在備註。
+- 實測用的 Mac 與 iPhone 型號、系統版本也請記一筆（影響結果）。
 
 ## 其他待辦
 - 發布前需正式簽章與公證（目前僅 ad-hoc 簽章）。
 - 補上授權（LICENSE）。
 - Linux：補編譯驗證，決定介面方案（egui 或 GTK/Qt），評估狀態列圖示。
-- 專案尚未推送到 GitHub（`origin` 已設為 `git@github.com:hoyangtsai/AwayLock.git`），變更也尚未 commit。
+- **自動發佈（已實作）：`.github/workflows/release.yml`。** main 有新 commit 就在 GitHub 上打包、發佈 Release，並更新 Homebrew tap（`hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`）。
+  - **觸發**：push 到 `main`；只改 `**.md` 或 `.gitignore` 的 commit 不觸發（`paths-ignore`）。`concurrency` 讓同時只跑一個，不會互相搶版本號或 tap。
+  - **流程**（`runs-on: macos-latest`，Apple Silicon）：
+    1. `Check tap token`：確認有 `TAP_TOKEN`，並在 clone tap 後執行 `git push --dry-run origin HEAD:main`，沒有寫入權限就在最前面失敗（不會建出只有一半的 Release）。不能改用 `gh api repos/... .permissions.push`，它回報的是使用者本人的權限，不是 token 的。
+    2. 安裝 Rust stable、`cargo test --workspace`（測試失敗就不發版）。
+    3. 決定版本號，執行 `scripts/package-macos.sh`（內部呼叫 `bundle-macos.sh release`，產出 `dist/awaylock-<版本>-arm64.zip` 與 `dist/awaylock.rb`）。
+    4. 建立 GitHub Release `v<版本>` 並上傳 zip；若該版本的 Release 已存在（重跑失敗的 job），改成覆蓋上傳 zip（`--clobber`）。
+    5. 把 `dist/awaylock.rb`（已填入 version 與 sha256，由 `packaging/homebrew/awaylock.rb.in` 渲染）複製到 tap 的 `Casks/awaylock.rb`，以 `github-actions[bot]` 身分 commit 並 push 到 tap 的 `main`。
+  - **版本號**：`<Info.plist 的 major.minor>.<github.run_number>`，例如 `0.1.7`。run number 在重跑同一個 run 時不變，所以重跑會得到同一個版本。要升 minor／major，改 `packaging/macos/Info.plist` 的 `CFBundleShortVersionString`。打包時用環境變數 `AWAYLOCK_VERSION`／`AWAYLOCK_BUILD` 覆寫 `Info.plist`（`CFBundleVersion` 是 run number）；沒設定時（本機打包）用 `Info.plist` 原值。
+  - **`TAP_TOKEN` secret**（設在 `hoyangtsai/awaylock` 的 Actions secrets）：Action 預設的 `GITHUB_TOKEN` 只能寫本倉庫，所以需要 fine-grained PAT：Repository access 選 **`hoyangtsai/homebrew-app`**（只選這一個），Permissions → Contents 為 **Read and write**，注意到期日（到期後要重建並再執行 `gh secret set TAP_TOKEN -R hoyangtsai/awaylock`）。只是修改既有 PAT 的權限時，同一串字會直接生效，不用更新 secret；若重建了 token 才要更新。用 `gh secret list -R hoyangtsai/awaylock` 的時間可以確認 secret 有沒有被換過。
+  - **注意事項**：
+    - 不要把 runner 改回 `macos-14`：曾出現 `The configuration 'macos-14-arm64-us-default' is not supported`，job 還沒開始就被取消。
+    - 腳本裡變數後面緊接全形標點時要寫成 `${VAR}`（例如 `${MODE}）`）。CI 的 locale 不是 UTF-8，`$MODE）` 會被當成別的變數名稱，`set -u` 下直接中止。
+    - 重跑失敗的 run 用的是**原本那次 push 的 commit**，不是目前的 main。
+    - 如果 Release 建好了但 tap 更新失敗，Release 會留在 GitHub 上、tap 停在舊版（曾因此出現 `v0.1.4`～`v0.1.6` 的 Release 但 tap 沒更新）。token 修好後重跑即可補上。
+    - cask 用的是新版 Homebrew 的語法（`postflight_steps`、`depends_on macos: :ventura`），舊版 Homebrew 可能無法載入。
+  - **尚未做**：仍是 ad-hoc 簽章、沒有公證，cask 靠 `postflight_steps` 移除隔離標記；有 Developer ID 後在 Action 加簽章與公證步驟（見上面「發布前需正式簽章與公證」）。cask 目前寫死 arm64，要支援 Intel 需要 universal 編譯。
+- 已推送到 GitHub（`origin`：`git@github.com:hoyangtsai/awaylock.git`），Homebrew 發佈流程見 README。
