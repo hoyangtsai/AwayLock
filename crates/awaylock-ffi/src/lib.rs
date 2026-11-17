@@ -1,7 +1,7 @@
 //! C 介面。給 Swift 原生介面呼叫；狀態以 JSON 字串傳遞。
 //!
 //! 所有回傳的 `char*` 都要用 `awaylock_free_string` 釋放。
-//! 對應的標頭檔：`apps/macos/Sources/CAwayLock/include/awaylock.h`。
+//! 對應的標頭檔：`apps/macos/Sources/cawaylock/include/awaylock.h`。
 
 use awaylock_runtime::Runtime;
 use std::ffi::{c_char, CStr, CString};

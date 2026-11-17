@@ -59,9 +59,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          gh release create "v$VERSION" "dist/AwayLock-$VERSION-arm64.zip" \
+          gh release create "v$VERSION" "dist/awaylock-$VERSION-arm64.zip" \
             --target "$GITHUB_SHA" \
-            --title "AwayLock $VERSION" \
+            --title "awaylock $VERSION" \
             --generate-notes
 
       - name: 更新 Homebrew tap

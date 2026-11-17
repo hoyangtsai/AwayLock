@@ -2,9 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>AwayLock</string>
-    <key>CFBundleDisplayName</key><string>AwayLock</string>
-    <key>CFBundleExecutable</key><string>AwayLock</string>
+    <key>CFBundleName</key><string>awaylock</string>
+    <key>CFBundleDisplayName</key><string>awaylock</string>
+    <key>CFBundleExecutable</key><string>awaylock</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.awaylock.app</string>
     <key>CFBundlePackageType</key><string>APPL</string>
@@ -14,6 +14,6 @@
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>AwayLock 需要藍牙來偵測 iPhone / Apple Watch 是否在附近，以便自動鎖定 Mac。</string>
+    <string>awaylock 需要藍牙來偵測 iPhone / Apple Watch 是否在附近，以便自動鎖定 Mac。</string>
 </dict>
 </plist>

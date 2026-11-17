@@ -7,9 +7,9 @@ use std::fs;
 use std::path::PathBuf;
 
 #[cfg(debug_assertions)]
-const APP_DIR: &str = "AwayLock Dev";
+const APP_DIR: &str = "awaylock Dev";
 #[cfg(not(debug_assertions))]
-const APP_DIR: &str = "AwayLock";
+const APP_DIR: &str = "awaylock";
 
 fn dir() -> Option<PathBuf> {
     // 測試或特殊情況可用環境變數指定資料夾，避免動到使用者的真實設定

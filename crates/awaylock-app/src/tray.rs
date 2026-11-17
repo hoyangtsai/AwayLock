@@ -50,7 +50,7 @@ pub fn build() -> Result<Tray, String> {
         .with_menu(Box::new(menu))
         .with_icon(lock_icon())
         .with_icon_as_template(true)
-        .with_tooltip("AwayLock")
+        .with_tooltip("awaylock")
         .build()
         .map_err(|e| e.to_string())?;
 

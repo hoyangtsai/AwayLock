@@ -2,7 +2,7 @@
 name = "awaylock-platform"
 version.workspace = true
 edition.workspace = true
-description = "AwayLock 平台層：實作 core 定義的埠（藍牙掃描、鎖定螢幕、鎖定狀態、開機啟動），依 macOS / Linux 切換。"
+description = "awaylock 平台層：實作 core 定義的埠（藍牙掃描、鎖定螢幕、鎖定狀態、開機啟動），依 macOS / Linux 切換。"
 
 [dependencies]
 awaylock-core = { workspace = true }

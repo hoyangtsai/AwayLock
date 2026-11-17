@@ -2,20 +2,20 @@ cask "awaylock" do
   version "@VERSION@"
   sha256 "@SHA256@"
 
-  url "https://github.com/hoyangtsai/AwayLock/releases/download/v#{version}/AwayLock-#{version}-arm64.zip"
-  name "AwayLock"
+  url "https://github.com/hoyangtsai/awaylock/releases/download/v#{version}/awaylock-#{version}-arm64.zip"
+  name "awaylock"
   desc "Menu bar app that locks your Mac when your phone or watch walks away"
-  homepage "https://github.com/hoyangtsai/AwayLock"
+  homepage "https://github.com/hoyangtsai/awaylock"
 
   depends_on arch: :arm64
   depends_on macos: ">= :ventura"
 
-  app "AwayLock.app"
+  app "awaylock.app"
 
   # App 未經 Apple 公證，移除隔離標記才能直接開啟
   postflight do
     system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/AwayLock.app"]
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/awaylock.app"]
   end
 
   zap trash: [

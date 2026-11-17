@@ -1,4 +1,4 @@
-# AwayLock
+# awaylock
 
 [English](README.md) | 繁體中文
 
@@ -35,12 +35,12 @@
 
 ## 建置與執行
 ```bash
-scripts/bundle-macos.sh release   # 發布版 → dist/AwayLock.app
-scripts/bundle-macos.sh dev       # 開發版 → dist/AwayLock Dev.app（含 Debug 分頁）
+scripts/bundle-macos.sh release   # 發布版 → dist/awaylock.app
+scripts/bundle-macos.sh dev       # 開發版 → dist/awaylock Dev.app（含 Debug 分頁）
 ```
 
 ```bash
-open dist/AwayLock.app
+open dist/awaylock.app
 ```
 
 - 腳本會先編譯 Rust 核心成動態函式庫，再編譯 Swift 介面並連結它，最後組成 `.app`。
@@ -65,9 +65,9 @@ brew install --cask hoyangtsai/app/awaylock
 
 ## 發佈新版本（維護者）
 1. 修改 `packaging/macos/Info.plist` 的版本號。
-2. 執行 `scripts/package-macos.sh`，產生 `dist/AwayLock-<版本>-arm64.zip` 與 `dist/awaylock.rb`。
+2. 執行 `scripts/package-macos.sh`，產生 `dist/awaylock-<版本>-arm64.zip` 與 `dist/awaylock.rb`。
 3. 在 GitHub 建立 tag `v<版本>` 的 Release，上傳 zip：
-   `gh release create v<版本> dist/AwayLock-<版本>-arm64.zip`
+   `gh release create v<版本> dist/awaylock-<版本>-arm64.zip`
 4. 把 `dist/awaylock.rb` 複製到 tap 倉庫 `hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`，commit 並 push。
 
 ## 使用方式

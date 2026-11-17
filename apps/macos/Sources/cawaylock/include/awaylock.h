@@ -1,4 +1,4 @@
-// AwayLock 核心（Rust）的 C 介面。對應 crates/awaylock-ffi/src/lib.rs。
+// awaylock 核心（Rust）的 C 介面。對應 crates/awaylock-ffi/src/lib.rs。
 // 回傳的 char* 都要用 awaylock_free_string 釋放。
 #ifndef AWAYLOCK_H
 #define AWAYLOCK_H

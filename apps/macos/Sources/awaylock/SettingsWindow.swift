@@ -4,7 +4,7 @@ import Combine
 
 /// 工具列樣式的分頁（圖示在上、文字在下），像系統設定視窗。
 final class SettingsTabViewController: NSTabViewController {
-    static let windowTitle = "AwayLock – Settings"
+    static let windowTitle = "awaylock – Settings"
 
     #if DEBUG
     private var debugItem: NSTabViewItem?
@@ -38,7 +38,7 @@ final class SettingsTabViewController: NSTabViewController {
         #endif
     }
 
-    // 視窗標題固定為「AwayLock – Settings」，不隨分頁變動
+    // 視窗標題固定為「awaylock – Settings」，不隨分頁變動
     override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
         super.tabView(tabView, didSelect: tabViewItem)
         DispatchQueue.main.async { [weak self] in

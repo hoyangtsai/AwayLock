@@ -2,7 +2,7 @@
 name = "awaylock-app"
 version.workspace = true
 edition.workspace = true
-description = "AwayLock 跨平台備用介面（egui）。macOS 使用 apps/macos 的 Swift 原生介面；這個 crate 預留給 Linux。"
+description = "awaylock 跨平台備用介面（egui）。macOS 使用 apps/macos 的 Swift 原生介面；這個 crate 預留給 Linux。"
 
 [[bin]]
 name = "awaylock"

@@ -12,7 +12,7 @@ use eframe::egui::{self, Align, Color32, Layout, RichText, Vec2, ViewportCommand
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
-pub const WINDOW_TITLE: &str = "AwayLock – Settings";
+pub const WINDOW_TITLE: &str = "awaylock – Settings";
 const STALE: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Copy, PartialEq)]
@@ -228,7 +228,7 @@ impl App {
                 }
                 ui.horizontal(|ui| {
                     ui.add_space(22.0);
-                    caption(ui, "登入 Mac 時自動開啟 AwayLock。");
+                    caption(ui, "登入 Mac 時自動開啟 awaylock。");
                 });
                 if let Some(e) = &self.autostart_error {
                     ui.colored_label(Color32::LIGHT_RED, e);
@@ -450,7 +450,7 @@ fn about_tab(ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
         ui.add_space(28.0);
         ui.label(RichText::new("🔒").size(40.0));
-        ui.label(RichText::new("AwayLock").size(22.0).strong());
+        ui.label(RichText::new("awaylock").size(22.0).strong());
         ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).weak());
         ui.add_space(8.0);
         ui.label("iPhone / Apple Watch 離開藍牙範圍時，自動鎖定 Mac。");

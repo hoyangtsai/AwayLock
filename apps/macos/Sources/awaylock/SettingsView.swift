@@ -24,7 +24,7 @@ struct GeneralView: View {
             VStack(alignment: .leading, spacing: 20) {
                 option(title: "開機時啟動",
                        isOn: $launchAtLogin,
-                       caption: "Mac 開機時自動開啟 AwayLock。")
+                       caption: "Mac 開機時自動開啟 awaylock。")
                     .onChange(of: launchAtLogin) { enabled in apply(enabled) }
 
                 if let errorMessage {
@@ -302,7 +302,7 @@ struct AboutView: View {
         VStack(spacing: 8) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 40))
-            Text("AwayLock").font(.title2).bold()
+            Text("awaylock").font(.title2).bold()
             Text(version).foregroundStyle(.secondary)
             Text("iPhone / Apple Watch 離開藍牙範圍時，自動鎖定 Mac。")
                 .font(.callout)

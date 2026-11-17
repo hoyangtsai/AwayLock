@@ -32,7 +32,7 @@ impl Runtime {
             Arc::new(SystemLocker),
             Arc::new(SystemLockProbe),
         );
-        let autostart: Arc<dyn Autostart> = Arc::new(SystemAutostart::new("AwayLock"));
+        let autostart: Arc<dyn Autostart> = Arc::new(SystemAutostart::new("awaylock"));
         Self { shared, source, autostart }
     }
 

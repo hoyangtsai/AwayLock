@@ -38,7 +38,7 @@ guard CommandLine.arguments.count == 2 else {
     exit(2)
 }
 let output = CommandLine.arguments[1]
-let iconset = NSTemporaryDirectory() + "AwayLock.iconset"
+let iconset = NSTemporaryDirectory() + "awaylock.iconset"
 try? FileManager.default.removeItem(atPath: iconset)
 try FileManager.default.createDirectory(atPath: iconset, withIntermediateDirectories: true)
 

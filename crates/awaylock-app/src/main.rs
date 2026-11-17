@@ -1,4 +1,4 @@
-//! AwayLock 跨平台備用介面（egui）：狀態列圖示與設定視窗。
+//! awaylock 跨平台備用介面（egui）：狀態列圖示與設定視窗。
 //!
 //! macOS 的正式介面是 `apps/macos` 的 Swift 原生視窗；這個程式預留給 Linux 等沒有原生介面的平台，
 //! 在 macOS 上也能執行（外觀非原生）。
@@ -23,7 +23,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "AwayLock",
+        "awaylock",
         options,
         Box::new(move |cc| {
             let app = ui::App::new(cc.egui_ctx.clone(), shared, source, autostart)?;

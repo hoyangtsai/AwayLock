@@ -2,7 +2,7 @@
 name = "awaylock-ffi"
 version.workspace = true
 edition.workspace = true
-description = "AwayLock 的 C 介面（動態函式庫），給 macOS 的 Swift 原生介面呼叫。"
+description = "awaylock 的 C 介面（動態函式庫），給 macOS 的 Swift 原生介面呼叫。"
 
 [lib]
 name = "awaylock_ffi"

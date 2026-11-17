@@ -1,11 +1,11 @@
-# AwayLock
+# awaylock
 
 English | [繁體中文](README.zh-tw.md)
 
 A menu bar app that automatically locks your computer when you walk away. Currently supports macOS, with an architecture prepared for Linux.
 
-AwayLock scans Bluetooth Low Energy (BLE) signals from devices you carry. While your computer is unlocked,
-if any device on your allowlist moves beyond the configured distance or stops being detected, AwayLock automatically locks the screen.
+awaylock scans Bluetooth Low Energy (BLE) signals from devices you carry. While your computer is unlocked,
+if any device on your allowlist moves beyond the configured distance or stops being detected, awaylock automatically locks the screen.
 
 > **Status: In development.** The core logic is written in Rust, with a native Swift interface for macOS. The app builds and launches,
 > but Bluetooth scanning and actual screen locking have not yet been fully verified on real hardware. See “Limitations” below and [HANDOFF.md](HANDOFF.md) for known issues.
@@ -35,12 +35,12 @@ if any device on your allowlist moves beyond the configured distance or stops be
 
 ## Build and Run
 ```bash
-scripts/bundle-macos.sh release   # Release build → dist/AwayLock.app
-scripts/bundle-macos.sh dev       # Development build → dist/AwayLock Dev.app (includes the Debug tab)
+scripts/bundle-macos.sh release   # Release build → dist/awaylock.app
+scripts/bundle-macos.sh dev       # Development build → dist/awaylock Dev.app (includes the Debug tab)
 ```
 
 ```bash
-open dist/AwayLock.app
+open dist/awaylock.app
 ```
 
 - The script first compiles the Rust core into a dynamic library, then builds and links the Swift interface, and finally assembles the `.app` bundle.
@@ -65,9 +65,9 @@ Only Apple Silicon (arm64) builds are currently available. The app is not notari
 
 ## Publishing a New Version (Maintainers)
 1. Update the version number in `packaging/macos/Info.plist`.
-2. Run `scripts/package-macos.sh` to generate `dist/AwayLock-<version>-arm64.zip` and `dist/awaylock.rb`.
+2. Run `scripts/package-macos.sh` to generate `dist/awaylock-<version>-arm64.zip` and `dist/awaylock.rb`.
 3. Create a GitHub release tagged `v<version>` and upload the ZIP:
-   `gh release create v<version> dist/AwayLock-<version>-arm64.zip`
+   `gh release create v<version> dist/awaylock-<version>-arm64.zip`
 4. Copy `dist/awaylock.rb` to `Casks/awaylock.rb` in the `hoyangtsai/homebrew-app` tap repository, then commit and push.
 
 ## Usage

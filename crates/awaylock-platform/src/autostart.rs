@@ -34,7 +34,7 @@ fn app_path() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
-        // .../AwayLock.app/Contents/MacOS/awaylock → .../AwayLock.app
+        // .../awaylock.app/Contents/MacOS/awaylock → .../awaylock.app
         if let Some(app) = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")) {
             return Ok(app.to_path_buf());
         }

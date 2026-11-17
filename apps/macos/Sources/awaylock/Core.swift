@@ -1,5 +1,5 @@
 import Foundation
-import CAwayLock
+import cawaylock
 
 // MARK: - Rust 核心回傳的資料（JSON）
 
