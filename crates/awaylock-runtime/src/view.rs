@@ -73,7 +73,7 @@ impl Runtime {
                     seen: seen_dev.is_some(),
                     distance_m: seen_dev.map(|d| d.meters_calibrated(a.rssi_at_1m)),
                     calibrated: a.rssi_at_1m.is_some(),
-                    calibrating: st.calibrations.get(&a.id) == Some(&CalibrationStatus::Running),
+                    calibrating: st.calibrations.get(&a.id).is_some_and(CalibrationStatus::is_running),
                     calibration_message: st.calibrations.get(&a.id).map(CalibrationStatus::message),
                 }
             })
@@ -411,7 +411,14 @@ mod tests {
         let r = begin(&rt.shared, rt.source.as_ref(), id);
         if r == StartResult::Started {
             assert!(rt.state().allowed[0].calibrating);
-            let cal = collect(rt.source.as_ref(), id, Duration::from_millis(1200), Duration::from_millis(60));
+            let cal = collect(
+                &rt.shared,
+                rt.source.as_ref(),
+                id,
+                Duration::from_millis(600),
+                Duration::from_millis(1500),
+                Duration::from_millis(60),
+            );
             finish(&rt.shared, id, &cal);
         }
         r
@@ -448,12 +455,12 @@ mod tests {
 
     #[test]
     fn calibration_without_new_readings_fails() {
-        // 假來源的裝置只有一筆樣本，期間也沒有新廣播
+        // 假來源的裝置期間沒有新廣播（唯一的樣本在按下之前）
         let rt = runtime();
         run_calibration(&rt, "mine");
         let a = &rt.state().allowed[0];
         assert!(!a.calibrated);
-        assert!(a.calibration_message.as_deref().unwrap().contains("斷斷續續"));
+        assert!(a.calibration_message.as_deref().unwrap().contains("沒有收到"), "{:?}", a.calibration_message);
     }
 
     #[test]
@@ -461,8 +468,15 @@ mod tests {
         use crate::calibrate::{begin, collect, finish};
         let rt = live_runtime(-49);
         begin(&rt.shared, rt.source.as_ref(), "mine");
-        let cal = collect(rt.source.as_ref(), "mine", Duration::from_millis(1200), Duration::from_millis(60));
-        rt.reset_calibration("mine");
+        rt.reset_calibration("mine"); // 收集前就取消：collect 立刻結束，finish 不套用
+        let cal = collect(
+            &rt.shared,
+            rt.source.as_ref(),
+            "mine",
+            Duration::from_millis(600),
+            Duration::from_millis(1500),
+            Duration::from_millis(60),
+        );
         finish(&rt.shared, "mine", &cal);
         assert!(!rt.state().allowed[0].calibrated);
     }

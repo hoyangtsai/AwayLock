@@ -121,7 +121,7 @@ impl Monitor {
         if age >= self.cfg.stale_after {
             return Presence { present: false, reason: format!("已 {} 秒沒收到廣播", age.as_secs()) };
         }
-        // 門檻依裝置的發射功率調整（iPhone 較強，門檻較高）；使用者校正過就用校正值
+        // 門檻依裝置 1 公尺處的訊號調整（例如 iPhone 用 -60）；使用者校正過就用校正值
         let threshold = d.threshold_calibrated(threshold, a.rssi_at_1m);
         if d.rssi < threshold {
             return Presence { present: false, reason: format!("訊號 {} < 門檻 {}", d.rssi, threshold) };
@@ -342,19 +342,20 @@ mod tests {
     }
 
     #[test]
-    fn iphone_threshold_is_adjusted_for_its_stronger_signal() {
+    fn iphone_threshold_follows_phone_reference() {
         let f = Fixture::new(&["a"]);
         let mut devices = HashMap::new();
-        // -70 dBm：一般裝置在 5 公尺門檻（-76）內，但 iPhone 訊號較強，-70 已約 6 公尺
-        let phone = NearbyDevice::new("a".into(), Some("My iPhone".into()), -70, true, f.now());
+        // iPhone 1 公尺處約 -60（比一般裝置弱 1 dB），5 公尺門檻是 -77：-77 dBm 仍算在範圍內
+        let phone = NearbyDevice::new("a".into(), Some("My iPhone".into()), -77, true, f.now());
         devices.insert("a".to_string(), phone);
         let p = f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now());
-        assert!(!p.present, "{}", p.reason);
-        assert!(p.reason.contains("-67"), "{}", p.reason);
+        assert!(p.present, "{}", p.reason);
+        assert!(p.reason.contains("-77"), "{}", p.reason);
 
-        let other = NearbyDevice::new("a".into(), None, -70, false, f.now());
+        // 一般裝置的門檻是 -76，同樣 -77 已經離開
+        let other = NearbyDevice::new("a".into(), None, -77, false, f.now());
         devices.insert("a".to_string(), other);
-        assert!(f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now()).present);
+        assert!(!f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now()).present);
     }
 
     #[test]

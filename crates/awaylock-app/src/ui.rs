@@ -313,7 +313,7 @@ impl App {
                             if ui.button("移除").clicked() {
                                 to_remove.push(a.id.clone());
                             }
-                            let calibrating = st.calibrations.get(&a.id) == Some(&CalibrationStatus::Running);
+                            let calibrating = st.calibrations.get(&a.id).is_some_and(CalibrationStatus::is_running);
                             let label = if calibrating { "校正中…" } else { "在 1 公尺校正" };
                             if ui
                                 .add_enabled(seen_dev.is_some() && !calibrating, egui::Button::new(label))
@@ -332,7 +332,7 @@ impl App {
                     ui.separator();
                 }
                 if !st.allowlist.is_empty() {
-                    caption(ui, "距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動幾秒。");
+                    caption(ui, "距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動；iPhone 請先解鎖並保持螢幕亮著。");
                 }
 
                 ui.add_space(12.0);

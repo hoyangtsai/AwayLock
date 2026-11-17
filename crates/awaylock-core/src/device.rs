@@ -158,16 +158,10 @@ impl NearbyDevice {
         base_threshold + (r - RSSI_AT_1M).round() as i32
     }
 
-    /// 校正用的讀數：`(最新樣本的時間, 中位數 RSSI)`。
-    ///
-    /// 只有在視窗裡的 [`RSSI_WINDOW`] 筆樣本都還沒過期、且最新一筆是剛收到的（[`READING_FRESH`] 內）時才回傳，
-    /// 避免拿樣本稀少或很久以前的中位數校正（例如只收到無效的 127，`last_seen` 有更新但樣本沒有）。
-    pub fn calibration_reading(&self, now: Instant) -> Option<(Instant, i32)> {
-        let (&(oldest, _), &(newest, _)) = (self.samples.front()?, self.samples.back()?);
-        let full = self.samples.len() == RSSI_WINDOW;
-        let fresh = now.saturating_duration_since(newest) <= READING_FRESH;
-        let unexpired = now.saturating_duration_since(oldest) <= SAMPLE_TTL;
-        (full && fresh && unexpired).then_some((newest, self.rssi))
+    /// 最新一筆有效樣本 `(收到的時間, RSSI)`。同一次廣播的重複回報已合併成最強的值。
+    /// 校正時直接收集這些原始樣本，不依賴中位數視窗，廣播稀疏的裝置也能校正。
+    pub fn latest_sample(&self) -> Option<(Instant, i32)> {
+        self.samples.back().copied()
     }
 
     /// 記錄新看到的 Apple 廣播類型。
@@ -275,9 +269,6 @@ pub const BURST_WINDOW: Duration = Duration::from_millis(50);
 
 /// 樣本的有效期限：超過這段時間的 RSSI 不再參與中位數。
 pub const SAMPLE_TTL: Duration = Duration::from_secs(10);
-
-/// 校正時，最新樣本最多可以是多久以前收到的。
-pub const READING_FRESH: Duration = Duration::from_secs(1);
 
 /// 距離指數平滑係數：新值佔 15%。
 pub const DISTANCE_ALPHA: f64 = 0.15;
@@ -471,7 +462,7 @@ mod tests {
 
     #[test]
     fn iphone_distance_uses_phone_reference() {
-        let d = NearbyDevice::new("a".into(), Some("Hoyang’s iPhone 17 Pro".into()), -62, true, Instant::now());
+        let d = NearbyDevice::new("a".into(), Some("Hoyang’s iPhone 17 Pro".into()), -72, true, Instant::now());
         assert_eq!(d.rssi_at_1m(), PHONE_RSSI_AT_1M);
         assert!((d.meters() - 3.0).abs() < 0.05, "{}", d.meters());
         // 其他裝置維持一般的 1 公尺 RSSI
@@ -481,13 +472,13 @@ mod tests {
     #[test]
     fn name_arriving_later_switches_reference_immediately() {
         let mut clk = Clock::new();
-        let mut d = dev(-62);
+        let mut d = dev(-72);
         for _ in 0..RSSI_WINDOW {
-            d.update(-62, None, false, clk.next());
+            d.update(-72, None, false, clk.next());
         }
-        assert!((d.meters() - estimated_meters(-62)).abs() < 1e-9); // 約 1.3 m
-        // 名稱稍後才出現：距離直接改用 iPhone 的換算，不必等指數平滑慢慢爬到 3 m
-        d.update(-62, Some("Hoyang’s iPhone 17 Pro".into()), true, clk.next());
+        assert!((d.meters() - estimated_meters(-72)).abs() < 1e-9); // 一般裝置的換算，約 3.3 m
+        // 名稱稍後才出現：距離直接改用 iPhone 的換算，不必等指數平滑慢慢移過去
+        d.update(-72, Some("Hoyang’s iPhone 17 Pro".into()), true, clk.next());
         assert!((d.meters() - 3.0).abs() < 0.05, "{}", d.meters());
     }
 
@@ -495,7 +486,7 @@ mod tests {
     fn threshold_follows_device_reference() {
         let phone = NearbyDevice::new("p".into(), Some("My iPhone".into()), -60, true, Instant::now());
         let watch = NearbyDevice::new("w".into(), Some("My Apple Watch".into()), -60, true, Instant::now());
-        assert_eq!(phone.threshold_calibrated(-76, None), -67);
+        assert_eq!(phone.threshold_calibrated(-76, None), -77);
         assert_eq!(watch.threshold_calibrated(-76, None), -76);
     }
 
@@ -622,33 +613,14 @@ mod tests {
     }
 
     #[test]
-    fn calibration_reading_needs_full_fresh_window() {
-        let mut c = Clock::new();
-        let mut d = NearbyDevice::new("x".into(), None, -50, false, c.next());
-        assert!(d.calibration_reading(c.0).is_none()); // 只有 1 筆
-        for _ in 1..RSSI_WINDOW {
-            d.update(-50, None, false, c.next());
-        }
-        assert_eq!(d.calibration_reading(c.0), Some((c.0, -50)));
-        // 之後只收到無效的 127：last_seen 更新，但最新樣本已經舊了，不能拿來校正
-        let later = c.0 + Duration::from_secs(5);
-        d.update(127, None, false, later);
-        assert_eq!(d.last_seen, later);
-        assert!(d.calibration_reading(later).is_none());
-    }
-
-    #[test]
-    fn calibration_reading_rejects_sparse_window() {
-        // 每 4 秒才一筆：計數雖已超過 7，但 10 秒內只剩 3 筆樣本
+    fn latest_sample_is_the_merged_burst_value() {
         let t0 = Instant::now();
-        let mut d = NearbyDevice::new("x".into(), None, -50, false, t0);
-        let mut t = t0;
-        for _ in 0..8 {
-            t += Duration::from_secs(4);
-            d.update(-50, None, false, t);
-        }
-        assert!(d.samples.len() < RSSI_WINDOW);
-        assert!(d.calibration_reading(t).is_none());
+        let mut d = NearbyDevice::new("x".into(), None, -60, false, t0);
+        assert_eq!(d.latest_sample(), Some((t0, -60)));
+        d.update(-55, None, false, t0 + Duration::from_millis(1)); // 同一次廣播較強的回報
+        assert_eq!(d.latest_sample(), Some((t0, -55)));
+        d.update(127, None, false, t0 + Duration::from_secs(2)); // 無效讀數不算新樣本
+        assert_eq!(d.latest_sample(), Some((t0, -55)));
     }
 
     #[test]

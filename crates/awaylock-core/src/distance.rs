@@ -7,9 +7,9 @@
 /// 一般裝置在 1 公尺處的 RSSI（dBm），iBeacon 常用的校準值。
 pub const RSSI_AT_1M: f64 = -59.0;
 
-/// iPhone 在 1 公尺處的 RSSI（dBm）。iPhone 的發射功率比一般 BLE 裝置高約 9 dB：
-/// 實測 iPhone 17 Pro 在 3 公尺處中位數約 -60～-62 dBm，套用 -59 會被估成 1.1～1.3 公尺。
-pub const PHONE_RSSI_AT_1M: f64 = -50.0;
+/// iPhone 在 1 公尺處的 RSSI（dBm）。實測 iPhone 17 Pro 放在 1 公尺處（鎖定）中位數約 -61～-63 dBm。
+/// iPhone 的訊號會隨鎖定狀態、擺放方向而差好幾 dB，要準確請用「在 1 公尺校正」。
+pub const PHONE_RSSI_AT_1M: f64 = -60.0;
 
 pub const PATH_LOSS_EXPONENT: f64 = 2.5;
 
@@ -80,7 +80,7 @@ mod tests {
     }
 
     #[test]
-    fn iphone_uses_stronger_reference() {
+    fn iphone_uses_phone_reference() {
         assert_eq!(reference_rssi(Some("Hoyang’s iPhone 17 Pro")), PHONE_RSSI_AT_1M);
         assert_eq!(reference_rssi(Some("IPHONE")), PHONE_RSSI_AT_1M);
         assert_eq!(reference_rssi(Some("Hoyang’s Apple Watch")), RSSI_AT_1M);
@@ -89,18 +89,18 @@ mod tests {
     }
 
     #[test]
-    fn iphone_at_three_meters_reads_about_three_meters() {
-        // 實測：iPhone 17 Pro 在 3 公尺處中位數 -60～-62 dBm
-        let near = estimated_meters_with(-60, PHONE_RSSI_AT_1M);
-        let far = estimated_meters_with(-62, PHONE_RSSI_AT_1M);
-        assert!((2.4..=2.6).contains(&near), "{near}");
-        assert!((2.9..=3.1).contains(&far), "{far}");
+    fn iphone_at_one_meter_reads_about_one_meter() {
+        // 實測：iPhone 17 Pro 在 1 公尺處中位數 -61～-63 dBm
+        let one = estimated_meters_with(-61, PHONE_RSSI_AT_1M);
+        let three = estimated_meters_with(-72, PHONE_RSSI_AT_1M);
+        assert!((1.0..=1.2).contains(&one), "{one}");
+        assert!((2.9..=3.1).contains(&three), "{three}");
     }
 
     #[test]
     fn threshold_with_reference_shifts_by_offset() {
         for m in [1.0, 2.5, 5.0] {
-            assert_eq!(rssi_threshold_with(m, PHONE_RSSI_AT_1M), rssi_threshold(m) + 9);
+            assert_eq!(rssi_threshold_with(m, PHONE_RSSI_AT_1M), rssi_threshold(m) - 1);
         }
     }
 

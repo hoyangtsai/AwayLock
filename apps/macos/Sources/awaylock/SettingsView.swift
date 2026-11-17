@@ -142,7 +142,7 @@ struct DevicesView: View {
                 }
             }
             if !core.state.allowed.isEmpty {
-                Text("距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動幾秒。")
+                Text("距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動；iPhone 請先解鎖並保持螢幕亮著。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
