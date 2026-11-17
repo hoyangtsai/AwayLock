@@ -1,6 +1,6 @@
 //! 以 btleplug 持續掃描附近的 BLE 廣播（macOS 與 Linux 共用）。
 
-use awaylock_core::device::{continuity_types, NearbyDevice, APPLE_COMPANY_ID};
+use awaylock_core::device::{continuity_types, is_valid_rssi, NearbyDevice, APPLE_COMPANY_ID};
 use awaylock_core::ports::DeviceSource;
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
@@ -88,14 +88,17 @@ async fn scan(shared: &Arc<Mutex<Shared>>) -> Result<(), String> {
                 let mut s = shared.lock().unwrap();
                 match s.devices.get_mut(&key) {
                     Some(d) => {
+                        // 127 表示讀不到訊號：update 會忽略該讀數，但仍更新 last_seen
                         d.update(rssi, props.local_name, is_apple, now);
                         d.merge_apple_types(&apple_types);
                     }
-                    None => {
+                    // 第一次看到的裝置必須有有效訊號才建立，避免以 127 當成起始距離
+                    None if is_valid_rssi(rssi) => {
                         let mut d = NearbyDevice::new(key.clone(), props.local_name, rssi, is_apple, now);
                         d.merge_apple_types(&apple_types);
                         s.devices.insert(key, d);
                     }
+                    None => {}
                 }
             }
             CentralEvent::StateUpdate(state) => {

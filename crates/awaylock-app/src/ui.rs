@@ -3,7 +3,7 @@
 use awaylock_runtime::config;
 use awaylock_runtime::engine::Shared;
 use crate::tray::{self, Tray};
-use awaylock_core::distance::{estimated_meters, format_meters};
+use awaylock_core::distance::format_meters;
 use awaylock_core::ports::{Autostart, DeviceSource};
 use awaylock_core::NearbyDevice;
 #[cfg(debug_assertions)]
@@ -294,7 +294,7 @@ impl App {
                             ui.label(&a.name);
                             let text = match devices.get(&a.id) {
                                 Some(d) if now.saturating_duration_since(d.last_seen) < STALE => {
-                                    format!("在附近 · 約 {}", format_meters(estimated_meters(d.rssi)))
+                                    format!("在附近 · 約 {}", format_meters(d.meters()))
                                 }
                                 _ => "未偵測到".to_string(),
                             };
@@ -316,7 +316,7 @@ impl App {
                         ui.vertical(|ui| {
                             ui.label(d.display_name());
                             let apple = if d.is_apple { " · Apple" } else { "" };
-                            caption(ui, &format!("約 {}{apple}", format_meters(estimated_meters(d.rssi))));
+                            caption(ui, &format!("約 {}{apple}", format_meters(d.meters())));
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.button("加入").clicked() {
@@ -361,7 +361,7 @@ impl App {
                 Some(d) => format!(
                     "{} dBm · 約 {} · {} 秒前",
                     d.rssi,
-                    format_meters(estimated_meters(d.rssi)),
+                    format_meters(d.meters()),
                     now.saturating_duration_since(d.last_seen).as_secs()
                 ),
             }

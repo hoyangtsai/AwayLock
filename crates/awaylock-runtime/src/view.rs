@@ -4,7 +4,6 @@
 //! 除錯狀態（[`DebugView`]）只存在 debug 編譯；發布版沒有這些程式碼。
 
 use crate::Runtime;
-use awaylock_core::distance::estimated_meters;
 use awaylock_core::{DeviceKind, NearbyDevice};
 use serde::Serialize;
 use std::time::Instant;
@@ -65,7 +64,7 @@ impl Runtime {
                     id: a.id.clone(),
                     name: a.name.clone(),
                     seen: seen_dev.is_some(),
-                    distance_m: seen_dev.map(|d| estimated_meters(d.rssi)),
+                    distance_m: seen_dev.map(|d| d.meters()),
                 }
             })
             .collect();
@@ -83,7 +82,7 @@ impl Runtime {
                 id: d.id.clone(),
                 name: d.display_name(),
                 is_apple: d.is_apple,
-                distance_m: estimated_meters(d.rssi),
+                distance_m: d.meters(),
             })
             .collect();
         let hidden_count = total - nearby.len();
@@ -119,7 +118,6 @@ impl Runtime {
 #[cfg(debug_assertions)]
 mod debug {
     use super::*;
-    use awaylock_core::distance::estimated_meters;
     use awaylock_core::Phase;
 
     #[derive(Serialize)]
@@ -188,7 +186,7 @@ mod debug {
                     reason: p.reason,
                     armed: m.is_armed(&a.id),
                     rssi: d.map(|d| d.rssi),
-                    distance_m: d.map(|d| estimated_meters(d.rssi)),
+                    distance_m: d.map(|d| d.meters()),
                     age_secs: d.map(|d| now.saturating_duration_since(d.last_seen).as_secs()),
                 }
             })
@@ -206,7 +204,7 @@ mod debug {
                 apple_types: d.apple_types.iter().map(|t| format!("{t:02X}")).collect::<Vec<_>>().join(" "),
                 allowed: st.allowlist.contains(&d.id),
                 rssi: d.rssi,
-                distance_m: estimated_meters(d.rssi),
+                distance_m: d.meters(),
                 age_secs: now.saturating_duration_since(d.last_seen).as_secs(),
             })
             .collect();
