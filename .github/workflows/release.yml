@@ -31,6 +31,12 @@ jobs:
             echo "::error::Missing secret TAP_TOKEN (a PAT with write access to hoyangtsai/homebrew-app)"
             exit 1
           fi
+          # Fail before building or releasing anything if the token cannot push to the tap
+          PUSH="$(GH_TOKEN="$TAP_TOKEN" gh api repos/hoyangtsai/homebrew-app --jq '.permissions.push')"
+          if [ "$PUSH" != "true" ]; then
+            echo "::error::TAP_TOKEN cannot push to hoyangtsai/homebrew-app (needs Contents: Read and write on that repository)"
+            exit 1
+          fi
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
@@ -60,10 +66,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          gh release create "v$VERSION" "dist/awaylock-$VERSION-arm64.zip" \
-            --target "$GITHUB_SHA" \
-            --title "awaylock $VERSION" \
-            --generate-notes
+          # Re-running a failed job must not fail because the release already exists
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "dist/awaylock-$VERSION-arm64.zip" --clobber
+          else
+            gh release create "v$VERSION" "dist/awaylock-$VERSION-arm64.zip" \
+              --target "$GITHUB_SHA" \
+              --title "awaylock $VERSION" \
+              --generate-notes
+          fi
 
       - name: Update Homebrew tap
         env:
