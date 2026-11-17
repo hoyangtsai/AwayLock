@@ -51,4 +51,4 @@ fi
 
 codesign --force --sign - "$APP/Contents/Frameworks/libawaylock_ffi.dylib"
 codesign --force --sign - "$APP"
-echo "完成（$MODE）：$ROOT/$APP"
+echo "完成（${MODE}）：$ROOT/$APP"
