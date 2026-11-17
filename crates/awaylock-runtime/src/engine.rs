@@ -2,6 +2,8 @@
 
 use awaylock_core::ports::{DeviceSource, LockStateProbe, ScreenLocker};
 use awaylock_core::{Action, AllowList, Monitor, MonitorConfig, Settings, Snapshot};
+use crate::calibrate::CalibrationStatus;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -14,11 +16,13 @@ pub struct SharedState {
     pub allowlist: AllowList,
     pub monitor: Monitor,
     pub last_check: Option<Instant>,
+    /// 各裝置的「在 1 公尺校正」進度。
+    pub calibrations: HashMap<String, CalibrationStatus>,
 }
 
 impl SharedState {
     pub fn new(settings: Settings, allowlist: AllowList) -> Self {
-        Self { settings, allowlist, monitor: Monitor::new(MonitorConfig::default()), last_check: None }
+        Self { settings, allowlist, monitor: Monitor::new(MonitorConfig::default()), last_check: None, calibrations: HashMap::new() }
     }
 }
 

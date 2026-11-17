@@ -122,10 +122,30 @@ struct DevicesView: View {
                         Text(statusText(for: a))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let msg = a.calibrationMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer()
+                    if a.calibrated {
+                        Button("重設校正") { core.resetCalibration(id: a.id) }
+                            .disabled(a.calibrating)
+                            .help("改回依裝置種類的預設值")
+                    }
+                    Button(a.calibrating ? "校正中…" : "在 1 公尺校正") { core.calibrate(id: a.id) }
+                        .disabled(!a.seen || a.calibrating)
+                        .help("把裝置放在離 Mac 約 1 公尺處，按下後保持不動幾秒")
                     Button("移除") { core.remove(id: a.id) }
                 }
+            }
+            if !core.state.allowed.isEmpty {
+                Text("距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動幾秒。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Divider().padding(.vertical, 4)
@@ -183,8 +203,8 @@ struct DevicesView: View {
     }
 
     private func statusText(for a: AllowedInfo) -> String {
-        guard a.seen, let m = a.distanceM else { return "未偵測到" }
-        return "在附近 · 約 \(formatMeters(m))"
+        guard a.seen, let m = a.distanceM else { return a.calibrated ? "未偵測到 · 已校正" : "未偵測到" }
+        return "在附近 · 約 \(formatMeters(m))" + (a.calibrated ? " · 已校正" : "")
     }
 }
 

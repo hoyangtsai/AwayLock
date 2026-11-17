@@ -31,6 +31,13 @@ void awaylock_set_only_phones_watches(bool on);
 void awaylock_add_device(const char *id, const char *name);
 void awaylock_remove_device(const char *id);
 
+// 開始「在 1 公尺校正」：在背景收集數秒的讀數，進度與結果見狀態 JSON 的
+// calibrating、calibration_message。
+// 回傳：0 已開始、1 不在允許列表、2 最近沒收到廣播、3 已在校正中、-1 尚未啟動。
+int awaylock_calibrate_device(const char *id);
+// 清除裝置的 1 公尺校正。
+void awaylock_reset_calibration(const char *id);
+
 // 釋放函式庫回傳的字串。
 void awaylock_free_string(char *s);
 

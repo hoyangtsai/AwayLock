@@ -1,5 +1,6 @@
 //! 設定視窗（egui）。分頁：General / Devices / Debug（僅開發版）/ About。
 
+use awaylock_runtime::calibrate::{self, CalibrationStatus};
 use awaylock_runtime::config;
 use awaylock_runtime::engine::Shared;
 use crate::tray::{self, Tray};
@@ -280,6 +281,8 @@ impl App {
 
         let mut to_add: Vec<(String, String)> = vec![];
         let mut to_remove: Vec<String> = vec![];
+        let mut to_calibrate: Option<String> = None;
+        let mut to_reset: Option<String> = None;
 
         {
             let st = self.shared.lock().unwrap();
@@ -289,24 +292,47 @@ impl App {
                     caption(ui, "尚未加入任何裝置。加入後，只有這些裝置離開時才會鎖定。");
                 }
                 for a in st.allowlist.devices() {
+                    let seen_dev =
+                        devices.get(&a.id).filter(|d| now.saturating_duration_since(d.last_seen) < STALE);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.label(&a.name);
-                            let text = match devices.get(&a.id) {
-                                Some(d) if now.saturating_duration_since(d.last_seen) < STALE => {
-                                    format!("在附近 · 約 {}", format_meters(d.meters()))
-                                }
-                                _ => "未偵測到".to_string(),
+                            let mut text = match seen_dev {
+                                Some(d) => format!("在附近 · 約 {}", format_meters(d.meters_calibrated(a.rssi_at_1m))),
+                                None => "未偵測到".to_string(),
                             };
+                            if a.rssi_at_1m.is_some() {
+                                text.push_str(" · 已校正");
+                            }
                             caption(ui, &text);
+                            if let Some(status) = st.calibrations.get(&a.id) {
+                                caption(ui, &status.message());
+                            }
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.button("移除").clicked() {
                                 to_remove.push(a.id.clone());
                             }
+                            let calibrating = st.calibrations.get(&a.id) == Some(&CalibrationStatus::Running);
+                            let label = if calibrating { "校正中…" } else { "在 1 公尺校正" };
+                            if ui
+                                .add_enabled(seen_dev.is_some() && !calibrating, egui::Button::new(label))
+                                .on_hover_text("把裝置放在離 Mac 約 1 公尺處，按下後保持不動幾秒")
+                                .clicked()
+                            {
+                                to_calibrate = Some(a.id.clone());
+                            }
+                            if a.rssi_at_1m.is_some()
+                                && ui.add_enabled(!calibrating, egui::Button::new("重設校正")).clicked()
+                            {
+                                to_reset = Some(a.id.clone());
+                            }
                         });
                     });
                     ui.separator();
+                }
+                if !st.allowlist.is_empty() {
+                    caption(ui, "距離不準時：把裝置放在離 Mac 約 1 公尺處，按「在 1 公尺校正」後保持不動幾秒。");
                 }
 
                 ui.add_space(12.0);
@@ -334,12 +360,20 @@ impl App {
             });
         }
 
+        if let Some(id) = to_calibrate {
+            calibrate::start(&self.shared, &self.source, &id);
+        }
+        if let Some(id) = to_reset {
+            calibrate::reset(&self.shared, &id);
+        }
+
         if !to_add.is_empty() || !to_remove.is_empty() {
             let mut st = self.shared.lock().unwrap();
             for (id, name) in to_add {
                 st.allowlist.add(id, name);
             }
             for id in to_remove {
+                st.calibrations.remove(&id);
                 st.allowlist.remove(&id);
             }
             config::save_allowlist(&st.allowlist);
@@ -356,12 +390,13 @@ impl App {
         let th = st.settings.threshold();
 
         let detail = |d: Option<&NearbyDevice>| -> String {
+            let cal = d.and_then(|d| st.allowlist.get(&d.id)).and_then(|a| a.rssi_at_1m);
             match d {
                 None => "無資料".to_string(),
                 Some(d) => format!(
                     "{} dBm · 約 {} · {} 秒前",
                     d.rssi,
-                    format_meters(d.meters()),
+                    format_meters(d.meters_calibrated(cal)),
                     now.saturating_duration_since(d.last_seen).as_secs()
                 ),
             }

@@ -8,6 +8,7 @@
 //! - `awaylock-app`：狀態列圖示、設定視窗，以及把各層接起來。
 
 pub mod allowlist;
+pub mod calibration;
 pub mod device;
 pub mod distance;
 pub mod monitor;
@@ -15,6 +16,7 @@ pub mod ports;
 pub mod settings;
 
 pub use allowlist::{AllowList, AllowedDevice};
+pub use calibration::{Calibration, CalibrationError};
 pub use device::{DeviceKind, NearbyDevice};
 pub use monitor::{Action, Monitor, MonitorConfig, Phase, Presence, Snapshot};
 pub use settings::Settings;

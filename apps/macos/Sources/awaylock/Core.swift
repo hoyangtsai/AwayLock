@@ -8,6 +8,9 @@ struct AllowedInfo: Decodable, Identifiable {
     let name: String
     let seen: Bool
     let distanceM: Double?
+    let calibrated: Bool
+    let calibrating: Bool
+    let calibrationMessage: String?
 }
 
 struct NearbyInfo: Decodable, Identifiable {
@@ -117,6 +120,17 @@ final class Core: ObservableObject {
 
     func add(id: String, name: String) {
         awaylock_add_device(id, name)
+        refresh()
+    }
+
+    /// 開始「在 1 公尺校正」。進度與結果會出現在該裝置的 `calibrationMessage`。
+    func calibrate(id: String) {
+        awaylock_calibrate_device(id)
+        refresh()
+    }
+
+    func resetCalibration(id: String) {
+        awaylock_reset_calibration(id)
         refresh()
     }
 

@@ -3,6 +3,7 @@
 //! 一般狀態（[`StateView`]）只含公尺距離，不含 dBm。
 //! 除錯狀態（[`DebugView`]）只存在 debug 編譯；發布版沒有這些程式碼。
 
+use crate::calibrate::CalibrationStatus;
 use crate::Runtime;
 use awaylock_core::{DeviceKind, NearbyDevice};
 use serde::Serialize;
@@ -15,6 +16,12 @@ pub struct AllowedView {
     /// 最近 15 秒內有收到廣播。
     pub seen: bool,
     pub distance_m: Option<f64>,
+    /// 使用者已在 1 公尺處校正過。
+    pub calibrated: bool,
+    /// 正在收集校正讀數。
+    pub calibrating: bool,
+    /// 最近一次校正的進度或結果訊息。
+    pub calibration_message: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -64,7 +71,10 @@ impl Runtime {
                     id: a.id.clone(),
                     name: a.name.clone(),
                     seen: seen_dev.is_some(),
-                    distance_m: seen_dev.map(|d| d.meters()),
+                    distance_m: seen_dev.map(|d| d.meters_calibrated(a.rssi_at_1m)),
+                    calibrated: a.rssi_at_1m.is_some(),
+                    calibrating: st.calibrations.get(&a.id) == Some(&CalibrationStatus::Running),
+                    calibration_message: st.calibrations.get(&a.id).map(CalibrationStatus::message),
                 }
             })
             .collect();
@@ -186,7 +196,7 @@ mod debug {
                     reason: p.reason,
                     armed: m.is_armed(&a.id),
                     rssi: d.map(|d| d.rssi),
-                    distance_m: d.map(|d| d.meters()),
+                    distance_m: d.map(|d| d.meters_calibrated(a.rssi_at_1m)),
                     age_secs: d.map(|d| now.saturating_duration_since(d.last_seen).as_secs()),
                 }
             })
@@ -204,7 +214,7 @@ mod debug {
                 apple_types: d.apple_types.iter().map(|t| format!("{t:02X}")).collect::<Vec<_>>().join(" "),
                 allowed: st.allowlist.contains(&d.id),
                 rssi: d.rssi,
-                distance_m: d.meters(),
+                distance_m: d.meters_calibrated(st.allowlist.get(&d.id).and_then(|a| a.rssi_at_1m)),
                 age_secs: now.saturating_duration_since(d.last_seen).as_secs(),
             })
             .collect();
@@ -241,6 +251,7 @@ mod tests {
     use awaylock_core::{AllowList, Settings};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     struct FakeSource(HashMap<String, NearbyDevice>);
     impl DeviceSource for FakeSource {
@@ -368,4 +379,101 @@ mod tests {
     fn debug_json_is_empty_in_release() {
         assert_eq!(runtime().debug_json(), "{}");
     }
+
+    /// 每次取快照都前進 300 ms、收到一筆新廣播的假來源，用來模擬校正期間的讀數。
+    struct LiveSource {
+        dev: Mutex<NearbyDevice>,
+        rssi: i32,
+    }
+    impl DeviceSource for LiveSource {
+        fn bluetooth_ready(&self) -> bool {
+            true
+        }
+        fn status_text(&self) -> String {
+            "掃描中".into()
+        }
+        fn snapshot(&self) -> HashMap<String, NearbyDevice> {
+            let mut d = self.dev.lock().unwrap();
+            d.update(self.rssi, None, true, Instant::now());
+            HashMap::from([(d.id.clone(), d.clone())])
+        }
+    }
+
+    fn live_runtime(rssi: i32) -> Runtime {
+        let rt = runtime();
+        let dev = NearbyDevice::new("mine".into(), Some("My Watch".into()), rssi, true, Instant::now());
+        Runtime { source: Arc::new(LiveSource { dev: Mutex::new(dev), rssi }), ..rt }
+    }
+
+    /// 同步跑完整個校正流程（不開執行緒、間隔 60 ms 讓每次快照都是新樣本）。
+    fn run_calibration(rt: &Runtime, id: &str) -> crate::calibrate::StartResult {
+        use crate::calibrate::{begin, collect, finish, StartResult};
+        let r = begin(&rt.shared, rt.source.as_ref(), id);
+        if r == StartResult::Started {
+            assert!(rt.state().allowed[0].calibrating);
+            let cal = collect(rt.source.as_ref(), id, Duration::from_millis(1200), Duration::from_millis(60));
+            finish(&rt.shared, id, &cal);
+        }
+        r
+    }
+
+    #[test]
+    fn calibration_at_one_meter_changes_distance() {
+        use crate::calibrate::StartResult;
+        let rt = live_runtime(-49);
+        assert_eq!(run_calibration(&rt, "other"), StartResult::NotAllowed);
+        assert_eq!(run_calibration(&rt, "mine"), StartResult::Started);
+        let s = rt.state();
+        let a = &s.allowed[0];
+        assert!(a.calibrated && !a.calibrating, "{:?}", a.calibration_message);
+        assert!(a.calibration_message.as_deref().unwrap().starts_with("已校正"));
+        assert!((a.distance_m.unwrap() - 1.0).abs() < 0.01);
+
+        rt.reset_calibration("mine");
+        let s = rt.state();
+        assert!(!s.allowed[0].calibrated);
+        assert!(s.allowed[0].calibration_message.is_none());
+        // 回到預設參考 -59：-49 ≈ 0.4 公尺
+        assert!((s.allowed[0].distance_m.unwrap() - 0.398).abs() < 0.01);
+    }
+
+    #[test]
+    fn calibration_at_wrong_distance_is_refused() {
+        let rt = live_runtime(-76);
+        run_calibration(&rt, "mine");
+        let a = &rt.state().allowed[0];
+        assert!(!a.calibrated);
+        assert!(a.calibration_message.as_deref().unwrap().contains("太弱"), "{:?}", a.calibration_message);
+    }
+
+    #[test]
+    fn calibration_without_new_readings_fails() {
+        // 假來源的裝置只有一筆樣本，期間也沒有新廣播
+        let rt = runtime();
+        run_calibration(&rt, "mine");
+        let a = &rt.state().allowed[0];
+        assert!(!a.calibrated);
+        assert!(a.calibration_message.as_deref().unwrap().contains("斷斷續續"));
+    }
+
+    #[test]
+    fn reset_during_calibration_cancels_it() {
+        use crate::calibrate::{begin, collect, finish};
+        let rt = live_runtime(-49);
+        begin(&rt.shared, rt.source.as_ref(), "mine");
+        let cal = collect(rt.source.as_ref(), "mine", Duration::from_millis(1200), Duration::from_millis(60));
+        rt.reset_calibration("mine");
+        finish(&rt.shared, "mine", &cal);
+        assert!(!rt.state().allowed[0].calibrated);
+    }
+
+    #[test]
+    fn unseen_device_cannot_be_calibrated() {
+        use crate::calibrate::StartResult;
+        let rt = runtime();
+        rt.add_device("gone", "Old Phone");
+        assert_eq!(run_calibration(&rt, "gone"), StartResult::NotSeen);
+        rt.remove_device("gone");
+    }
+
 }

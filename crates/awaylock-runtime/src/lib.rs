@@ -3,6 +3,7 @@
 //! 介面（Swift 原生視窗、egui 視窗……）只需要透過 [`Runtime`] 取得狀態、修改設定，
 //! 不必知道藍牙或判定的細節。
 
+pub mod calibrate;
 pub mod config;
 pub mod engine;
 pub mod view;
@@ -11,7 +12,6 @@ use awaylock_core::ports::{Autostart, DeviceSource};
 use awaylock_platform::{BleScanner, SystemAutostart, SystemLockProbe, SystemLocker};
 use engine::Shared;
 use std::sync::{Arc, Mutex};
-
 pub struct Runtime {
     pub shared: Shared,
     pub source: Arc<dyn DeviceSource>,
@@ -64,8 +64,19 @@ impl Runtime {
         }
     }
 
+    /// 開始「在 1 公尺校正」：在背景收集數秒的讀數，進度與結果見狀態的 `calibration_message`。
+    pub fn calibrate_device(&self, id: &str) -> calibrate::StartResult {
+        calibrate::start(&self.shared, &self.source, id)
+    }
+
+    /// 清除校正，改回依裝置種類的預設值。
+    pub fn reset_calibration(&self, id: &str) {
+        calibrate::reset(&self.shared, id);
+    }
+
     pub fn remove_device(&self, id: &str) {
         let mut st = self.shared.lock().unwrap();
+        st.calibrations.remove(id);
         if st.allowlist.remove(id) {
             config::save_allowlist(&st.allowlist);
         }

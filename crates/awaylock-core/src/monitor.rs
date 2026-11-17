@@ -121,6 +121,8 @@ impl Monitor {
         if age >= self.cfg.stale_after {
             return Presence { present: false, reason: format!("已 {} 秒沒收到廣播", age.as_secs()) };
         }
+        // 門檻依裝置的發射功率調整（iPhone 較強，門檻較高）；使用者校正過就用校正值
+        let threshold = d.threshold_calibrated(threshold, a.rssi_at_1m);
         if d.rssi < threshold {
             return Presence { present: false, reason: format!("訊號 {} < 門檻 {}", d.rssi, threshold) };
         }
@@ -242,7 +244,7 @@ mod tests {
                 monitor: Monitor::new(MonitorConfig::default()),
                 allowed: ids
                     .iter()
-                    .map(|i| AllowedDevice { id: (*i).into(), name: format!("dev-{i}") })
+                    .map(|i| AllowedDevice { id: (*i).into(), name: format!("dev-{i}"), rssi_at_1m: None })
                     .collect(),
                 devices: HashMap::new(),
             }
@@ -337,6 +339,34 @@ mod tests {
             }
         }
         assert_eq!(locked, Some(Action::Lock { device_name: "dev-b".into() }));
+    }
+
+    #[test]
+    fn iphone_threshold_is_adjusted_for_its_stronger_signal() {
+        let f = Fixture::new(&["a"]);
+        let mut devices = HashMap::new();
+        // -70 dBm：一般裝置在 5 公尺門檻（-76）內，但 iPhone 訊號較強，-70 已約 6 公尺
+        let phone = NearbyDevice::new("a".into(), Some("My iPhone".into()), -70, true, f.now());
+        devices.insert("a".to_string(), phone);
+        let p = f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now());
+        assert!(!p.present, "{}", p.reason);
+        assert!(p.reason.contains("-67"), "{}", p.reason);
+
+        let other = NearbyDevice::new("a".into(), None, -70, false, f.now());
+        devices.insert("a".to_string(), other);
+        assert!(f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now()).present);
+    }
+
+    #[test]
+    fn calibrated_reference_overrides_default_threshold() {
+        let mut f = Fixture::new(&["a"]);
+        // 使用者在 1 公尺處量到 -45：門檻 = -76 + (-45 - -59) = -62
+        f.allowed[0].rssi_at_1m = Some(-45.0);
+        let mut devices = HashMap::new();
+        devices.insert("a".to_string(), NearbyDevice::new("a".into(), Some("My iPhone".into()), -64, true, f.now()));
+        let p = f.monitor.evaluate(&f.allowed[0], &devices, TH, f.now());
+        assert!(!p.present, "{}", p.reason);
+        assert!(p.reason.contains("-62"), "{}", p.reason);
     }
 
     #[test]

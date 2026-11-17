@@ -84,6 +84,32 @@ pub unsafe extern "C" fn awaylock_remove_device(id: *const c_char) {
     }
 }
 
+/// 開始「在 1 公尺校正」（使用者要先把裝置放在約 1 公尺處）。會在背景收集數秒的讀數，
+/// 進度與結果見狀態 JSON 的 `calibrating`、`calibration_message`。
+///
+/// 回傳：0 已開始、1 不在允許列表、2 最近沒收到廣播、3 已在校正中、-1 尚未啟動。
+///
+/// # Safety
+/// `id` 必須是有效、以 NUL 結尾的 C 字串。
+#[no_mangle]
+pub unsafe extern "C" fn awaylock_calibrate_device(id: *const c_char) -> i32 {
+    match (RUNTIME.get(), from_c(id)) {
+        (Some(rt), Some(id)) => rt.calibrate_device(&id) as i32,
+        _ => -1,
+    }
+}
+
+/// 清除裝置的 1 公尺校正，改回預設值。
+///
+/// # Safety
+/// `id` 必須是有效、以 NUL 結尾的 C 字串。
+#[no_mangle]
+pub unsafe extern "C" fn awaylock_reset_calibration(id: *const c_char) {
+    if let (Some(rt), Some(id)) = (RUNTIME.get(), from_c(id)) {
+        rt.reset_calibration(&id);
+    }
+}
+
 /// 釋放本函式庫回傳的字串。
 ///
 /// # Safety
