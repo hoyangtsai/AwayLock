@@ -31,9 +31,11 @@ jobs:
             echo "::error::Missing secret TAP_TOKEN (a PAT with write access to hoyangtsai/homebrew-app)"
             exit 1
           fi
-          # Fail before building or releasing anything if the token cannot push to the tap
-          PUSH="$(GH_TOKEN="$TAP_TOKEN" gh api repos/hoyangtsai/homebrew-app --jq '.permissions.push')"
-          if [ "$PUSH" != "true" ]; then
+          # Fail before building or releasing anything if the token cannot push to the tap.
+          # The repository API reports the user's own permission, not the token's, so use a
+          # push dry-run: it authenticates against git-receive-pack, which requires write access.
+          git clone --quiet --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/hoyangtsai/homebrew-app.git" "$RUNNER_TEMP/tap-check"
+          if ! git -C "$RUNNER_TEMP/tap-check" push --dry-run origin HEAD:main; then
             echo "::error::TAP_TOKEN cannot push to hoyangtsai/homebrew-app (needs Contents: Read and write on that repository)"
             exit 1
           fi
