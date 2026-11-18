@@ -64,11 +64,22 @@ brew install --cask hoyangtsai/app/awaylock
 Only Apple Silicon (arm64) builds are currently available. The app is not notarized by Apple. Homebrew automatically removes the quarantine attribute during installation, allowing the app to open directly.
 
 ## Publishing a New Version (Maintainers)
-1. Update the version number in `packaging/macos/Info.plist`.
-2. Run `scripts/package-macos.sh` to generate `dist/awaylock-<version>-arm64.zip` and `dist/awaylock.rb`.
-3. Create a GitHub release tagged `v<version>` and upload the ZIP:
-   `gh release create v<version> dist/awaylock-<version>-arm64.zip`
-4. Copy `dist/awaylock.rb` to `Casks/awaylock.rb` in the `hoyangtsai/homebrew-app` tap repository, then commit and push.
+Releases are built by GitHub Actions when a version tag is pushed. Tag the commit you want to release (on `main`):
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The tag must look like `v0.2.0` (`vMAJOR.MINOR.PATCH`) and be higher than the latest release. The version number comes from the tag name; pushing to `main` does not publish anything.
+
+The `Release` workflow (`.github/workflows/release.yml`) then:
+1. Checks that the `TAP_TOKEN` secret can push to the tap repository.
+2. Runs `cargo test --workspace`.
+3. Runs `scripts/package-macos.sh` to build `awaylock-<version>-arm64.zip` and the cask file.
+4. Creates the GitHub release for the tag and uploads the ZIP.
+5. Commits the updated cask to `Casks/awaylock.rb` in the `hoyangtsai/homebrew-app` tap.
+
+`TAP_TOKEN` is a repository secret: a fine-grained personal access token with **Contents: Read and write** on `hoyangtsai/homebrew-app`. See [HANDOFF.md](HANDOFF.md) for details and troubleshooting.
 
 ## Usage
 1. Open the app and go to the **Devices** tab.
