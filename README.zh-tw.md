@@ -64,11 +64,22 @@ brew install --cask hoyangtsai/app/awaylock
 目前只提供 Apple Silicon（arm64）版本。App 沒有 Apple 公證，Homebrew 安裝時會自動移除隔離標記，所以可以直接開啟。
 
 ## 發佈新版本（維護者）
-1. 修改 `packaging/macos/Info.plist` 的版本號。
-2. 執行 `scripts/package-macos.sh`，產生 `dist/awaylock-<版本>-arm64.zip` 與 `dist/awaylock.rb`。
-3. 在 GitHub 建立 tag `v<版本>` 的 Release，上傳 zip：
-   `gh release create v<版本> dist/awaylock-<版本>-arm64.zip`
-4. 把 `dist/awaylock.rb` 複製到 tap 倉庫 `hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`，commit 並 push。
+推送版本 tag 時，由 GitHub Actions 負責建置與發佈。在要發佈的 commit（請在 `main` 上）打 tag 並推送：
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+tag 格式必須是 `v0.2.0`（`vMAJOR.MINOR.PATCH`），且要比最新版本高。版本號取自 tag 名稱；推送到 `main` 不會發佈任何東西。
+
+`Release` workflow（`.github/workflows/release.yml`）接著會：
+1. 確認 `TAP_TOKEN` secret 有權限推送到 tap 倉庫。
+2. 執行 `cargo test --workspace`。
+3. 執行 `scripts/package-macos.sh`，產生 `awaylock-<版本>-arm64.zip` 與 cask 檔。
+4. 為該 tag 建立 GitHub Release 並上傳 zip。
+5. 把更新後的 cask commit 到 `hoyangtsai/homebrew-app` tap 的 `Casks/awaylock.rb`。
+
+`TAP_TOKEN` 是倉庫 secret：fine-grained personal access token，對 `hoyangtsai/homebrew-app` 具備 **Contents: Read and write**。細節與疑難排解見 [HANDOFF.md](HANDOFF.md)。
 
 ## 使用方式
 1. 開啟 App，到 **Devices** 分頁。
