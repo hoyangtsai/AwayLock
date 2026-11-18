@@ -179,21 +179,27 @@ Debug 分頁的「掃描到的所有裝置」依名稱排序，每個裝置有�
 - 發布前需正式簽章與公證（目前僅 ad-hoc 簽章）。
 - 補上授權（LICENSE）。
 - Linux：補編譯驗證，決定介面方案（egui 或 GTK/Qt），評估狀態列圖示。
-- **自動發佈（已實作）：`.github/workflows/release.yml`。** main 有新 commit 就在 GitHub 上打包、發佈 Release，並更新 Homebrew tap（`hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`）。
-  - **觸發**：push 到 `main`；只改 `**.md` 或 `.gitignore` 的 commit 不觸發（`paths-ignore`）。`concurrency` 讓同時只跑一個，不會互相搶版本號或 tap。
+- **自動發佈（已實作）：`.github/workflows/release.yml`。** 推送 `v*` 版本 tag 時，在 GitHub 上打包、發佈該 tag 的 Release，並更新 Homebrew tap（`hoyangtsai/homebrew-app` 的 `Casks/awaylock.rb`）。
+  - **發版方式**：在要發佈的 commit（請在 `main` 上）打 tag 並推送，不需要手動打包或建立 Release：
+    ```bash
+    git tag v0.2.0
+    git push origin v0.2.0
+    ```
+  - **觸發**：只在推送 `v*` tag 時執行；推送到 `main` 不會發版（原本是每個 main commit 都發版，已改掉）。`concurrency` 讓同時只跑一個，不會互相搶 tap。workflow 不檢查 tag 的 commit 是否在 `main` 上。
   - **流程**（`runs-on: macos-latest`，Apple Silicon）：
     1. `Check tap token`：確認有 `TAP_TOKEN`，並在 clone tap 後執行 `git push --dry-run origin HEAD:main`，沒有寫入權限就在最前面失敗（不會建出只有一半的 Release）。不能改用 `gh api repos/... .permissions.push`，它回報的是使用者本人的權限，不是 token 的。
     2. 安裝 Rust stable、`cargo test --workspace`（測試失敗就不發版）。
-    3. 決定版本號，執行 `scripts/package-macos.sh`（內部呼叫 `bundle-macos.sh release`，產出 `dist/awaylock-<版本>-arm64.zip` 與 `dist/awaylock.rb`）。
-    4. 建立 GitHub Release `v<版本>` 並上傳 zip；若該版本的 Release 已存在（重跑失敗的 job），改成覆蓋上傳 zip（`--clobber`）。
+    3. 從 tag 決定版本號（格式必須是 `vMAJOR.MINOR.PATCH`，否則直接失敗），執行 `scripts/package-macos.sh`（內部呼叫 `bundle-macos.sh release`，產出 `dist/awaylock-<版本>-arm64.zip` 與 `dist/awaylock.rb`）。
+    4. 為該 tag 建立 GitHub Release（`--verify-tag`，tag 已存在）並上傳 zip；若該版本的 Release 已存在（重跑失敗的 job），改成覆蓋上傳 zip（`--clobber`）。
     5. 把 `dist/awaylock.rb`（已填入 version 與 sha256，由 `packaging/homebrew/awaylock.rb.in` 渲染）複製到 tap 的 `Casks/awaylock.rb`，以 `github-actions[bot]` 身分 commit 並 push 到 tap 的 `main`。
-  - **版本號**：`<Info.plist 的 major.minor>.<github.run_number>`，例如 `0.1.7`。run number 在重跑同一個 run 時不變，所以重跑會得到同一個版本。要升 minor／major，改 `packaging/macos/Info.plist` 的 `CFBundleShortVersionString`。打包時用環境變數 `AWAYLOCK_VERSION`／`AWAYLOCK_BUILD` 覆寫 `Info.plist`（`CFBundleVersion` 是 run number）；沒設定時（本機打包）用 `Info.plist` 原值。
+  - **版本號**：取自 tag 名稱去掉開頭的 `v`（`v0.2.0` → `0.2.0`），由人決定，不再自動遞增。打包時用環境變數 `AWAYLOCK_VERSION`／`AWAYLOCK_BUILD` 覆寫 `Info.plist`（`CFBundleVersion` 是 `github.run_number`）；沒設定時（本機打包）用 `Info.plist` 原值，所以 `Info.plist` 的版本不影響發版。新版本號要比 tap 目前的版本高，否則 cask 會被降版。
+  - **歷史**：改成 tag 觸發之前，每個 main commit 都會發版，版本是 `0.1.<run number>`（`v0.1.0` 是手動發佈；之後有 `v0.1.4`～`v0.1.7`、`v0.1.9`，其中 `v0.1.4`～`v0.1.6` 的 Release 是 tap 更新失敗時留下的）。這些 tag 已存在，不會重新觸發。截至改成 tag 觸發時，最新版本是 `v0.1.9`，下一個 tag 要比它高。
   - **`TAP_TOKEN` secret**（設在 `hoyangtsai/awaylock` 的 Actions secrets）：Action 預設的 `GITHUB_TOKEN` 只能寫本倉庫，所以需要 fine-grained PAT：Repository access 選 **`hoyangtsai/homebrew-app`**（只選這一個），Permissions → Contents 為 **Read and write**，注意到期日（到期後要重建並再執行 `gh secret set TAP_TOKEN -R hoyangtsai/awaylock`）。只是修改既有 PAT 的權限時，同一串字會直接生效，不用更新 secret；若重建了 token 才要更新。用 `gh secret list -R hoyangtsai/awaylock` 的時間可以確認 secret 有沒有被換過。
   - **注意事項**：
     - 不要把 runner 改回 `macos-14`：曾出現 `The configuration 'macos-14-arm64-us-default' is not supported`，job 還沒開始就被取消。
     - 腳本裡變數後面緊接全形標點時要寫成 `${VAR}`（例如 `${MODE}）`）。CI 的 locale 不是 UTF-8，`$MODE）` 會被當成別的變數名稱，`set -u` 下直接中止。
-    - 重跑失敗的 run 用的是**原本那次 push 的 commit**，不是目前的 main。
-    - 如果 Release 建好了但 tap 更新失敗，Release 會留在 GitHub 上、tap 停在舊版（曾因此出現 `v0.1.4`～`v0.1.6` 的 Release 但 tap 沒更新）。token 修好後重跑即可補上。
+    - 重跑失敗的 run 用的是**原本那個 tag 指向的 commit**，不是目前的 main。要重新打包不同的內容，需要刪掉並重建 tag（或發新版本）。
+    - 如果 Release 建好了但 tap 更新失敗，Release 會留在 GitHub 上、tap 停在舊版（曾因此出現 `v0.1.4`～`v0.1.6` 的 Release 但 tap 沒更新）。token 修好後重跑同一個 run 即可補上（`Check tap token` 現在會在最前面擋下這種情況）。
     - cask 用的是新版 Homebrew 的語法（`postflight_steps`、`depends_on macos: :ventura`），舊版 Homebrew 可能無法載入。
   - **尚未做**：仍是 ad-hoc 簽章、沒有公證，cask 靠 `postflight_steps` 移除隔離標記；有 Developer ID 後在 Action 加簽章與公證步驟（見上面「發布前需正式簽章與公證」）。cask 目前寫死 arm64，要支援 Intel 需要 universal 編譯。
 - 已推送到 GitHub（`origin`：`git@github.com:hoyangtsai/awaylock.git`），Homebrew 發佈流程見 README。
